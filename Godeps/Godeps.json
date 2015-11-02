@@ -6,12 +6,12 @@
 	],
 	"Deps": [
 		{
-			"ImportPath": "Master/GoSDK/vmturbo.sdk.go/communicator",
-			"Rev": "0bb1b465a38304136255f9341b4a6150305ab515"
+			"ImportPath": "github.com/vmturbo/vmturbo-go-sdk/sdk",
+			"Rev": "3995a6d94e3415c39638ddf36bd7ce0be0884807"
 		},
 		{
-			"ImportPath": "Master/GoSDK/vmturbo.sdk.go/sdk",
-			"Rev": "0bb1b465a38304136255f9341b4a6150305ab515"
+			"ImportPath": "github.com/vmturbo/vmturbo-go-sdk/communicator",
+			"Rev": "3995a6d94e3415c39638ddf36bd7ce0be0884807"
 		},
 		{
 			"ImportPath": "bitbucket.org/bertimus9/systemstat",
