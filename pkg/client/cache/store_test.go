@@ -19,7 +19,7 @@ package cache
 import (
 	"testing"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util"
 )
 
 // Test public interface
@@ -123,8 +123,8 @@ func testStoreKeyFunc(obj interface{}) (string, error) {
 	return obj.(testStoreObject).id, nil
 }
 
-func testStoreIndexFunc(obj interface{}) (string, error) {
-	return obj.(testStoreObject).val, nil
+func testStoreIndexFunc(obj interface{}) ([]string, error) {
+	return []string{obj.(testStoreObject).val}, nil
 }
 
 func testStoreIndexers() Indexers {

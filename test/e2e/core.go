@@ -29,7 +29,7 @@ type command struct {
 	component string
 }
 
-func coreDump(dir string) {
+func CoreDump(dir string) {
 	c, err := loadClient()
 	if err != nil {
 		fmt.Printf("Error creating client: %v", err)
@@ -60,7 +60,7 @@ func coreDump(dir string) {
 	// I wish there was a better way to get the master IP...
 	config, err := loadConfig()
 	if err != nil {
-		fmt.Printf("Error loading config: %v")
+		fmt.Printf("Error loading config: %v", err)
 	}
 	ix := strings.LastIndex(config.Host, "/")
 	master := net.JoinHostPort(config.Host[ix+1:], "22")

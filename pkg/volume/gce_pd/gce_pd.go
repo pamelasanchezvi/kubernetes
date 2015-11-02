@@ -21,13 +21,13 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/exec"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/mount"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/volume"
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/types"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/exec"
+	"k8s.io/kubernetes/pkg/util/mount"
+	"k8s.io/kubernetes/pkg/volume"
 )
 
 // This is the primary entrypoint for volume plugins.
@@ -40,6 +40,7 @@ type gcePersistentDiskPlugin struct {
 }
 
 var _ volume.VolumePlugin = &gcePersistentDiskPlugin{}
+var _ volume.PersistentVolumePlugin = &gcePersistentDiskPlugin{}
 
 const (
 	gcePersistentDiskPluginName = "kubernetes.io/gce-pd"
@@ -70,11 +71,17 @@ func (plugin *gcePersistentDiskPlugin) NewBuilder(spec *volume.Spec, pod *api.Po
 }
 
 func (plugin *gcePersistentDiskPlugin) newBuilderInternal(spec *volume.Spec, podUID types.UID, manager pdManager, mounter mount.Interface) (volume.Builder, error) {
+	// GCEPDs used directly in a pod have a ReadOnly flag set by the pod author.
+	// GCEPDs used as a PersistentVolume gets the ReadOnly flag indirectly through the persistent-claim volume used to mount the PV
+	var readOnly bool
+
 	var gce *api.GCEPersistentDiskVolumeSource
 	if spec.VolumeSource.GCEPersistentDisk != nil {
 		gce = spec.VolumeSource.GCEPersistentDisk
+		readOnly = gce.ReadOnly
 	} else {
 		gce = spec.PersistentVolumeSource.GCEPersistentDisk
+		readOnly = spec.ReadOnly
 	}
 
 	pdName := gce.PDName
@@ -83,7 +90,6 @@ func (plugin *gcePersistentDiskPlugin) newBuilderInternal(spec *volume.Spec, pod
 	if gce.Partition != 0 {
 		partition = strconv.Itoa(gce.Partition)
 	}
-	readOnly := gce.ReadOnly
 
 	return &gcePersistentDiskBuilder{
 		gcePersistentDisk: &gcePersistentDisk{
@@ -221,6 +227,10 @@ func (b *gcePersistentDiskBuilder) SetUpAt(dir string) error {
 	}
 
 	return nil
+}
+
+func (b *gcePersistentDiskBuilder) IsReadOnly() bool {
+	return b.readOnly
 }
 
 func makeGlobalPDName(host volume.VolumeHost, devName string) string {

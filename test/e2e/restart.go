@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/util/wait"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -232,13 +232,13 @@ func restartNodes(provider string, nt time.Duration) error {
 //   done
 //
 //   # Step 2: Start the recreate.
-//   output=$(gcloud preview managed-instance-groups --project=${PROJECT} --zone=${ZONE} recreate-instances ${GROUP} --instance="${i}")
+//   output=$(gcloud compute instance-groups managed --project=${PROJECT} --zone=${ZONE} recreate-instances ${GROUP} --instance="${i}")
 //   op=${output##*:}
 //
 //   # Step 3: Wait until it's complete.
 //   status=""
 //   while [[ "${status}" != "DONE" ]]; do
-// 	  output=$(gcloud preview managed-instance-groups --zone="${ZONE}" get-operation ${op} | grep status)
+// 	  output=$(gcloud compute instance-groups managed --zone="${ZONE}" get-operation ${op} | grep status)
 // 	  status=${output##*:}
 //   done
 func migRollingUpdateSelf(nt time.Duration) error {

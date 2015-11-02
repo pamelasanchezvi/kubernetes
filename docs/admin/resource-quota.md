@@ -64,7 +64,7 @@ Neither contention nor changes to quota will affect already-running pods.
 ## Enabling Resource Quota
 
 Resource Quota support is enabled by default for many Kubernetes distributions.  It is
-enabled when the apiserver `--admission_control=` flag has `ResourceQuota` as
+enabled when the apiserver `--admission-control=` flag has `ResourceQuota` as
 one of its arguments.
 
 Resource Quota is enforced in a particular namespace when there is a
@@ -160,14 +160,14 @@ Sometimes more complex policies may be desired, such as:
 
 Such policies could be implemented using ResourceQuota as a building-block, by
 writing a 'controller' which watches the quota usage and adjusts the quota
-hard limits of each namespace according to other signals. 
+hard limits of each namespace according to other signals.
 
 Note that resource quota divides up aggregate cluster resources, but it creates no
 restrictions around nodes: pods from several namespaces may run on the same node.
 
 ## Example
 
-See a [detailed example for how to use resource quota](../user-guide/resourcequota/). 
+See a [detailed example for how to use resource quota](../user-guide/resourcequota/).
 
 ## Read More
 

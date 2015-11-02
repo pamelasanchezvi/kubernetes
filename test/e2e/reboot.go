@@ -20,10 +20,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -79,7 +79,7 @@ var _ = Describe("Reboot", func() {
 	It("each node by switching off the network interface and ensure they function upon switch on", func() {
 		// switch the network interface off for a while to simulate a network outage
 		// We sleep 10 seconds to give some time for ssh command to cleanly finish before network is down.
-		testReboot(c, "nohup sh -c 'sleep 10 && sudo ifdown eth0 && sleep 120 && sudo ifup eth0' >/dev/null 2>&1 &")
+		testReboot(c, "nohup sh -c 'sleep 10 && sudo ifconfig eth0 down && sleep 120 && sudo ifconfig eth0 up' >/dev/null 2>&1 &")
 	})
 
 	It("each node by dropping all inbound packets for a while and ensure they function afterwards", func() {

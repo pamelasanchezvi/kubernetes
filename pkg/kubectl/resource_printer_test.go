@@ -26,10 +26,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/testapi"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/testapi"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util"
 
 	"github.com/ghodss/yaml"
 )
@@ -414,8 +414,7 @@ func TestTemplateStrings(t *testing.T) {
 			"true",
 		},
 	}
-	// The point of this test is to verify that the below template works. If you change this
-	// template, you need to update hack/e2e-suite/update.sh.
+	// The point of this test is to verify that the below template works.
 	tmpl := `{{if (exists . "status" "containerStatuses")}}{{range .status.containerStatuses}}{{if (and (eq .name "foo") (exists . "state" "running"))}}true{{end}}{{end}}{{end}}`
 	p, err := NewTemplatePrinter([]byte(tmpl))
 	if err != nil {
@@ -633,6 +632,7 @@ func TestPrintHumanReadableService(t *testing.T) {
 		{
 			Spec: api.ServiceSpec{
 				ClusterIP: "1.2.3.4",
+				Type:      "LoadBalancer",
 				Ports: []api.ServicePort{
 					{
 						Port:     80,
@@ -675,6 +675,7 @@ func TestPrintHumanReadableService(t *testing.T) {
 		{
 			Spec: api.ServiceSpec{
 				ClusterIP: "1.2.3.4",
+				Type:      "LoadBalancer",
 				Ports: []api.ServicePort{
 					{
 						Port:     80,
@@ -703,6 +704,7 @@ func TestPrintHumanReadableService(t *testing.T) {
 		{
 			Spec: api.ServiceSpec{
 				ClusterIP: "1.2.3.4",
+				Type:      "LoadBalancer",
 				Ports: []api.ServicePort{
 					{
 						Port:     80,
@@ -759,13 +761,9 @@ func TestPrintHumanReadableService(t *testing.T) {
 				t.Errorf("expected to contain port: %s, but doesn't: %s", portSpec, output)
 			}
 		}
-		// Max of # ports and (# public ip + cluster ip)
-		count := len(svc.Spec.Ports)
-		if len(svc.Status.LoadBalancer.Ingress)+1 > count {
-			count = len(svc.Status.LoadBalancer.Ingress) + 1
-		}
-		if count != strings.Count(output, "\n") {
-			t.Errorf("expected %d newlines, found %d", count, strings.Count(output, "\n"))
+		// Each service should print on one line
+		if 1 != strings.Count(output, "\n") {
+			t.Errorf("expected a single newline, found %d", strings.Count(output, "\n"))
 		}
 	}
 }

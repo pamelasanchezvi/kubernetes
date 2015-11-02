@@ -22,10 +22,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/errors"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/fielderrors"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util/errors"
+	"k8s.io/kubernetes/pkg/util/fielderrors"
 )
 
 // HTTP Status codes not in the golang http package.
@@ -34,7 +34,7 @@ const (
 	StatusTooManyRequests     = 429
 	// HTTP recommendations are for servers to define 5xx error codes
 	// for scenarios not covered by behavior. In this case, ServerTimeout
-	// is an indication that a transient server error has occured and the
+	// is an indication that a transient server error has occurred and the
 	// client *should* retry, with an optional Retry-After header to specify
 	// the back off window.
 	StatusServerTimeout = 504

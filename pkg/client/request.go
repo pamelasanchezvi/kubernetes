@@ -30,17 +30,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/metrics"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/httpstream"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
-	watchjson "github.com/GoogleCloudPlatform/kubernetes/pkg/watch/json"
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/errors"
+	"k8s.io/kubernetes/pkg/client/metrics"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/httpstream"
+	"k8s.io/kubernetes/pkg/watch"
+	watchjson "k8s.io/kubernetes/pkg/watch/json"
 )
 
 // specialParams lists parameters that are handled specially and which users of Request
@@ -259,6 +259,7 @@ const (
 	// A constant that clients can use to refer in a field selector to the object name field.
 	// Will be automatically emitted as the correct name for the API version.
 	NodeUnschedulable = "spec.unschedulable"
+	NodeCondition     = "status.conditions.type"
 	ObjectNameField   = "metadata.name"
 	PodHost           = "spec.nodeName"
 	SecretType        = "type"
@@ -316,6 +317,7 @@ var fieldMappings = versionToResourceToFieldMapping{
 		"nodes": clientFieldNameToAPIVersionFieldName{
 			ObjectNameField:   "metadata.name",
 			NodeUnschedulable: "spec.unschedulable",
+			NodeCondition:     "status.conditions.type",
 		},
 		"pods": clientFieldNameToAPIVersionFieldName{
 			PodHost: "spec.nodeName",
@@ -527,6 +529,7 @@ func (r *Request) Watch() (watch.Interface, error) {
 		return nil, r.err
 	}
 	url := r.URL().String()
+
 	req, err := http.NewRequest(r.verb, url, r.body)
 	if err != nil {
 		return nil, err
@@ -600,8 +603,6 @@ func (r *Request) Stream() (io.ReadCloser, error) {
 		bodyText := string(bodyBytes)
 		return nil, fmt.Errorf("%s while accessing %v: %s", resp.Status, url, bodyText)
 	}
-
-	return resp.Body, nil
 }
 
 // Upgrade upgrades the request so that it supports multiplexed bidirectional
@@ -641,7 +642,7 @@ func (r *Request) Upgrade(config *Config, newRoundTripperFunc func(*tls.Config) 
 
 // request connects to the server and invokes the provided function when a server response is
 // received. It handles retry behavior and up front validation of requests. It wil invoke
-// fn at most once. It will return an error if a problem occured prior to connecting to the
+// fn at most once. It will return an error if a problem occurred prior to connecting to the
 // server - the provided function is responsible for handling server errors.
 func (r *Request) request(fn func(*http.Request, *http.Response)) error {
 	if r.err != nil {

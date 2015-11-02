@@ -23,27 +23,25 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubectl"
-	cmdutil "github.com/GoogleCloudPlatform/kubernetes/pkg/kubectl/cmd/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubectl/resource"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/kubectl"
+	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
+	"k8s.io/kubernetes/pkg/kubectl/resource"
+	"k8s.io/kubernetes/pkg/runtime"
 )
 
 const (
 	create_long = `Create a resource by filename or stdin.
 
 JSON and YAML formats are accepted.`
-	create_example = `// Create a pod using the data in pod.json.
+	create_example = `# Create a pod using the data in pod.json.
 $ kubectl create -f ./pod.json
 
-// Create a pod based on the JSON passed into stdin.
+# Create a pod based on the JSON passed into stdin.
 $ cat pod.json | kubectl create -f -`
 )
 
 func NewCmdCreate(f *cmdutil.Factory, out io.Writer) *cobra.Command {
-	var filenames util.StringList
 	cmd := &cobra.Command{
 		Use:     "create -f FILENAME",
 		Short:   "Create a resource by filename or stdin",
@@ -52,13 +50,12 @@ func NewCmdCreate(f *cmdutil.Factory, out io.Writer) *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			cmdutil.CheckErr(ValidateArgs(cmd, args))
 			cmdutil.CheckErr(cmdutil.ValidateOutputArgs(cmd))
-			shortOutput := cmdutil.GetFlagString(cmd, "output") == "name"
-			cmdutil.CheckErr(RunCreate(f, out, filenames, shortOutput))
+			cmdutil.CheckErr(RunCreate(f, cmd, out))
 		},
 	}
 
 	usage := "Filename, directory, or URL to file to use to create the resource"
-	kubectl.AddJsonFilenameFlag(cmd, &filenames, usage)
+	kubectl.AddJsonFilenameFlag(cmd, usage)
 	cmd.MarkFlagRequired("filename")
 
 	cmdutil.AddOutputFlagsForMutation(cmd)
@@ -72,7 +69,8 @@ func ValidateArgs(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func RunCreate(f *cmdutil.Factory, out io.Writer, filenames util.StringList, shortOutput bool) error {
+func RunCreate(f *cmdutil.Factory, cmd *cobra.Command, out io.Writer) error {
+
 	schema, err := f.Validator()
 	if err != nil {
 		return err
@@ -83,6 +81,7 @@ func RunCreate(f *cmdutil.Factory, out io.Writer, filenames util.StringList, sho
 		return err
 	}
 
+	filenames := cmdutil.GetFlagStringSlice(cmd, "filename")
 	mapper, typer := f.Object()
 	r := resource.NewBuilder(mapper, typer, f.ClientMapperForCommand()).
 		Schema(schema).
@@ -108,6 +107,7 @@ func RunCreate(f *cmdutil.Factory, out io.Writer, filenames util.StringList, sho
 		}
 		count++
 		info.Refresh(obj, true)
+		shortOutput := cmdutil.GetFlagString(cmd, "output") == "name"
 		if !shortOutput {
 			printObjectSpecificMessage(info.Object, out)
 		}

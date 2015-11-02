@@ -19,28 +19,30 @@ package etcd
 import (
 	"testing"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/latest"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/rest/resttest"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/registry/namespace"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/tools"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/tools/etcdtest"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/latest"
+	"k8s.io/kubernetes/pkg/api/rest/resttest"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/registry/namespace"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/storage"
+	etcdstorage "k8s.io/kubernetes/pkg/storage/etcd"
+	"k8s.io/kubernetes/pkg/tools"
+	"k8s.io/kubernetes/pkg/tools/etcdtest"
+	"k8s.io/kubernetes/pkg/util"
 
 	"github.com/coreos/go-etcd/etcd"
 )
 
-func newEtcdStorage(t *testing.T) (*tools.FakeEtcdClient, tools.StorageInterface) {
+func newEtcdStorage(t *testing.T) (*tools.FakeEtcdClient, storage.Interface) {
 	fakeEtcdClient := tools.NewFakeEtcdClient(t)
 	fakeEtcdClient.TestIndex = true
-	etcdStorage := tools.NewEtcdStorage(fakeEtcdClient, latest.Codec, etcdtest.PathPrefix())
+	etcdStorage := etcdstorage.NewEtcdStorage(fakeEtcdClient, latest.Codec, etcdtest.PathPrefix())
 	return fakeEtcdClient, etcdStorage
 }
 
-func newStorage(t *testing.T) (*REST, *tools.FakeEtcdClient, tools.StorageInterface) {
+func newStorage(t *testing.T) (*REST, *tools.FakeEtcdClient, storage.Interface) {
 	fakeEtcdClient, s := newEtcdStorage(t)
 	storage, _, _ := NewStorage(s)
 	return storage, fakeEtcdClient, s
@@ -282,32 +284,10 @@ func TestNamespaceDecode(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	expect := validNewNamespace()
-	expect.Status.Phase = api.NamespaceActive
 	storage, fakeEtcdClient, _ := newStorage(t)
-	ctx := api.NewContext()
-	key, err := storage.Etcd.KeyFunc(ctx, "foo")
-	key = etcdtest.AddPrefix(key)
-	if err != nil {
-		t.Fatalf("unexpected key error: %v", err)
-	}
-	fakeEtcdClient.Data[key] = tools.EtcdResponseWithError{
-		R: &etcd.Response{
-			Node: &etcd.Node{
-				Value: runtime.EncodeOrDie(latest.Codec, expect),
-			},
-		},
-	}
-	obj, err := storage.Get(api.NewContext(), "foo")
-	namespace := obj.(*api.Namespace)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	expect.Status.Phase = api.NamespaceActive
-	if e, a := expect, namespace; !api.Semantic.DeepEqual(e, a) {
-		t.Errorf("Unexpected namespace: %s", util.ObjectDiff(e, a))
-	}
+	test := resttest.New(t, storage, fakeEtcdClient.SetError).ClusterScope()
+	namespace := validNewNamespace()
+	test.TestGet(namespace)
 }
 
 func TestDeleteNamespace(t *testing.T) {

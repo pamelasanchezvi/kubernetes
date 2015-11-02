@@ -133,7 +133,7 @@ When using Docker:
 **TODO: document behavior for rkt**
 
 If a container exceeds its memory limit, it may be terminated.  If it is restartable, it will be
-restarted by kubelet, as will any other type of runtime failure.  
+restarted by kubelet, as will any other type of runtime failure.
 
 A container may or may not be allowed to exceed its CPU limit for extended periods of time.
 However, it will not be killed for excessive CPU usage.
@@ -169,42 +169,73 @@ If a pod or pods are pending with this message, then there are several things to
 - Check that the pod is not larger than all the nodes.  For example, if all the nodes
 have a capacity of `cpu: 1`, then a pod with a limit of `cpu: 1.1` will never be scheduled.
 
-You can check node capacities with the `kubectl get nodes -o <format>` command.
-Here are some example command lines that extract just the necessary information:
-- `kubectl get nodes -o yaml | grep '\sname\|cpu\|memory'`
-- `kubectl get nodes -o json | jq '.items[] | {name: .metadata.name, cap: .status.capacity}'`
+You can check node capacities and amounts allocated with the `kubectl describe nodes` command.
+For example:
+
+```console
+$ kubectl describe nodes gke-cluster-4-386701dd-node-ww4p
+Name:			gke-cluster-4-386701dd-node-ww4p
+[ ... lines removed for clarity ...]
+Capacity:
+ cpu:		1
+ memory:	464Mi
+ pods:		40
+Allocated resources (total requests):
+ cpu:		910m
+ memory:	2370Mi
+ pods:		4
+[ ... lines removed for clarity ...]
+Pods:				(4 in total)
+  Namespace			Name								CPU(milliCPU)			Memory(bytes)
+  frontend 			webserver-ffj8j							500 (50% of total)		2097152000 (50% of total)
+  kube-system			fluentd-cloud-logging-gke-cluster-4-386701dd-node-ww4p		100 (10% of total)		209715200 (5% of total)
+  kube-system			kube-dns-v8-qopgw						310 (31% of total)		178257920 (4% of total)
+TotalResourceLimits:
+  CPU(milliCPU):		910 (91% of total)
+  Memory(bytes):		2485125120 (59% of total)
+[ ... lines removed for clarity ...]
+```
+
+Here you can see from the `Allocated resorces` section that that a pod which ask for more than
+90 millicpus or more than 1341MiB of memory will not be able to fit on this node.
+
+Looking at the `Pods` section, you can see which pods are taking up space on the node.
 
 The [resource quota](../admin/resource-quota.md) feature can be configured
 to limit the total amount of resources that can be consumed.  If used in conjunction
 with namespaces, it can prevent one team from hogging all the resources.
 
-### My container is terminated 
+### My container is terminated
 
 Your container may be terminated because it's resource-starved. To check if a container is being killed because it is hitting a resource limit, call `kubectl describe pod`
 on the pod you are interested in:
 
 ```console
 [12:54:41] $ ./cluster/kubectl.sh describe pod simmemleak-hra99
-Name:               simmemleak-hra99
-Namespace:          default
-Image(s):           saadali/simmemleak
-Node:               kubernetes-minion-tf0f/10.240.216.66
-Labels:             name=simmemleak
-Status:             Running
+Name:                           simmemleak-hra99
+Namespace:                      default
+Image(s):                       saadali/simmemleak
+Node:                           kubernetes-minion-tf0f/10.240.216.66
+Labels:                         name=simmemleak
+Status:                         Running
 Reason:             
 Message:            
-IP:             10.244.2.75
-Replication Controllers:    simmemleak (1/1 replicas created)
+IP:                             10.244.2.75
+Replication Controllers:        simmemleak (1/1 replicas created)
 Containers:
   simmemleak:
     Image:  saadali/simmemleak
     Limits:
-      cpu:      100m
-      memory:       50Mi
-    State:      Running
-      Started:      Tue, 07 Jul 2015 12:54:41 -0700
-    Ready:      False
-    Restart Count:  5
+      cpu:                      100m
+      memory:                   50Mi
+    State:                      Running
+      Started:                  Tue, 07 Jul 2015 12:54:41 -0700
+    Last Termination State:     Terminated
+      Exit Code:                1
+      Started:                  Fri, 07 Jul 2015 12:54:30 -0700
+      Finished:                 Fri, 07 Jul 2015 12:54:33 -0700
+    Ready:                      False
+    Restart Count:              5
 Conditions:
   Type      Status
   Ready     False 
@@ -219,9 +250,7 @@ Events:
 
 The `Restart Count:  5` indicates that the `simmemleak` container in this pod was terminated and restarted 5 times.
 
-Once [#10861](https://github.com/GoogleCloudPlatform/kubernetes/issues/10861) is resolved the reason for the termination of the last container will also be printed in this output.
-
-Until then you can call `get pod` with the `-o template -t ...` option to fetch the status of previously terminated containers:
+You can call `get pod` with the `-o template -t ...` option to fetch the status of previously terminated containers:
 
 ```console
 [13:59:01] $ ./cluster/kubectl.sh  get pod -o template -t '{{range.status.containerStatuses}}{{"Container Name: "}}{{.name}}{{"\r\nLastState: "}}{{.lastState}}{{end}}'  simmemleak-60xbc
@@ -243,7 +272,7 @@ resource, and a framework for adding custom [resource types](../design/resources
 
 The current system does not facilitate overcommitment of resources because resources reserved
 with container limits are assured.  It is planned to support multiple levels of [Quality of
-Service](https://github.com/GoogleCloudPlatform/kubernetes/issues/168).
+Service](http://issue.k8s.io/168).
 
 Currently, one unit of CPU means different things on different cloud providers, and on different
 machine types within the same cloud providers.  For example, on AWS, the capacity of a node

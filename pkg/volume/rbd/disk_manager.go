@@ -25,8 +25,8 @@ package rbd
 import (
 	"os"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/mount"
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/util/mount"
 )
 
 // Abstract interface to disk operations.
@@ -62,7 +62,7 @@ func diskSetUp(manager diskManager, b rbdBuilder, volPath string, mounter mount.
 	}
 	// Perform a bind mount to the full path to allow duplicate mounts of the same disk.
 	options := []string{"bind"}
-	if b.ReadOnly {
+	if b.IsReadOnly() {
 		options = append(options, "ro")
 	}
 	err = mounter.Mount(globalPDPath, volPath, "", options)

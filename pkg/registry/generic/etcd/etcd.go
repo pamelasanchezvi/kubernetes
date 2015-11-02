@@ -21,17 +21,17 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	kubeerr "github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
-	etcderr "github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors/etcd"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/rest"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/registry/generic"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/tools"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
+	"k8s.io/kubernetes/pkg/api"
+	kubeerr "k8s.io/kubernetes/pkg/api/errors"
+	etcderr "k8s.io/kubernetes/pkg/api/errors/etcd"
+	"k8s.io/kubernetes/pkg/api/rest"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/registry/generic"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/storage"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/watch"
 
 	"github.com/golang/glog"
 )
@@ -103,7 +103,7 @@ type Etcd struct {
 	ReturnDeletedObject bool
 
 	// Used for all etcd access functions
-	Storage tools.StorageInterface
+	Storage storage.Interface
 }
 
 // NamespaceKeyRootFunc is the default function for constructing etcd paths to resource directories enforcing namespace rules.
@@ -174,30 +174,6 @@ func (e *Etcd) ListPredicate(ctx api.Context, m generic.Matcher) (runtime.Object
 	return generic.FilterList(list, m, generic.DecoratorFunc(e.Decorator))
 }
 
-// CreateWithName inserts a new item with the provided name
-// DEPRECATED: use Create instead
-func (e *Etcd) CreateWithName(ctx api.Context, name string, obj runtime.Object) error {
-	key, err := e.KeyFunc(ctx, name)
-	if err != nil {
-		return err
-	}
-	if e.CreateStrategy != nil {
-		if err := rest.BeforeCreate(e.CreateStrategy, ctx, obj); err != nil {
-			return err
-		}
-	}
-	ttl, err := e.calculateTTL(obj, 0, false)
-	if err != nil {
-		return err
-	}
-	err = e.Storage.Create(key, obj, nil, ttl)
-	err = etcderr.InterpretCreateError(err, e.EndpointName, name)
-	if err == nil && e.Decorator != nil {
-		err = e.Decorator(obj)
-	}
-	return err
-}
-
 // Create inserts a new item according to the unique key from the object.
 func (e *Etcd) Create(ctx api.Context, obj runtime.Object) (runtime.Object, error) {
 	trace := util.NewTrace("Create " + reflect.TypeOf(obj).String())
@@ -238,25 +214,6 @@ func (e *Etcd) Create(ctx api.Context, obj runtime.Object) (runtime.Object, erro
 	return out, nil
 }
 
-// UpdateWithName updates the item with the provided name
-// DEPRECATED: use Update instead
-func (e *Etcd) UpdateWithName(ctx api.Context, name string, obj runtime.Object) error {
-	key, err := e.KeyFunc(ctx, name)
-	if err != nil {
-		return err
-	}
-	ttl, err := e.calculateTTL(obj, 0, true)
-	if err != nil {
-		return err
-	}
-	err = e.Storage.Set(key, obj, nil, ttl)
-	err = etcderr.InterpretUpdateError(err, e.EndpointName, name)
-	if err == nil && e.Decorator != nil {
-		err = e.Decorator(obj)
-	}
-	return err
-}
-
 // Update performs an atomic update and set of the object. Returns the result of the update
 // or an error. If the registry allows create-on-update, the create flow will be executed.
 // A bool is returned along with the object and any errors, to indicate object creation.
@@ -282,7 +239,7 @@ func (e *Etcd) Update(ctx api.Context, obj runtime.Object) (runtime.Object, bool
 	// TODO: expose TTL
 	creating := false
 	out := e.NewFunc()
-	err = e.Storage.GuaranteedUpdate(key, out, true, func(existing runtime.Object, res tools.ResponseMeta) (runtime.Object, *uint64, error) {
+	err = e.Storage.GuaranteedUpdate(key, out, true, func(existing runtime.Object, res storage.ResponseMeta) (runtime.Object, *uint64, error) {
 		version, err := e.Storage.Versioner().ObjectResourceVersion(existing)
 		if err != nil {
 			return nil, nil, err
@@ -455,7 +412,7 @@ func (e *Etcd) Watch(ctx api.Context, label labels.Selector, field fields.Select
 
 // WatchPredicate starts a watch for the items that m matches.
 func (e *Etcd) WatchPredicate(ctx api.Context, m generic.Matcher, resourceVersion string) (watch.Interface, error) {
-	version, err := tools.ParseWatchResourceVersion(resourceVersion, e.EndpointName)
+	version, err := storage.ParseWatchResourceVersion(resourceVersion, e.EndpointName)
 	if err != nil {
 		return nil, err
 	}
@@ -490,7 +447,7 @@ func (e *Etcd) WatchPredicate(ctx api.Context, m generic.Matcher, resourceVersio
 // if the TTL cannot be calculated. The defaultTTL is changed to 1 if less than zero. Zero means
 // no TTL, not expire immediately.
 func (e *Etcd) calculateTTL(obj runtime.Object, defaultTTL int64, update bool) (ttl uint64, err error) {
-	// etcd may return a negative TTL for a node if the expiration has not occured due
+	// etcd may return a negative TTL for a node if the expiration has not occurred due
 	// to server lag - we will ensure that the value is at least set.
 	if defaultTTL < 0 {
 		defaultTTL = 1

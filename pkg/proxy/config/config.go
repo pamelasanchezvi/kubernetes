@@ -19,10 +19,10 @@ package config
 import (
 	"sync"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/config"
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/types"
+	"k8s.io/kubernetes/pkg/util/config"
 )
 
 // Operation is a type of operation of services or endpoints.
@@ -57,17 +57,17 @@ type EndpointsUpdate struct {
 
 // ServiceConfigHandler is an abstract interface of objects which receive update notifications for the set of services.
 type ServiceConfigHandler interface {
-	// OnUpdate gets called when a configuration has been changed by one of the sources.
+	// OnServiceUpdate gets called when a configuration has been changed by one of the sources.
 	// This is the union of all the configuration sources.
-	OnUpdate(services []api.Service)
+	OnServiceUpdate(services []api.Service)
 }
 
 // EndpointsConfigHandler is an abstract interface of objects which receive update notifications for the set of endpoints.
 type EndpointsConfigHandler interface {
-	// OnUpdate gets called when endpoints configuration is changed for a given
+	// OnEndpointsUpdate gets called when endpoints configuration is changed for a given
 	// service on any of the configuration sources. An example is when a new
 	// service comes up, or when containers come up or down for an existing service.
-	OnUpdate(endpoints []api.Endpoints)
+	OnEndpointsUpdate(endpoints []api.Endpoints)
 }
 
 // EndpointsConfig tracks a set of endpoints configurations.
@@ -91,7 +91,7 @@ func NewEndpointsConfig() *EndpointsConfig {
 
 func (c *EndpointsConfig) RegisterHandler(handler EndpointsConfigHandler) {
 	c.bcaster.Add(config.ListenerFunc(func(instance interface{}) {
-		handler.OnUpdate(instance.([]api.Endpoints))
+		handler.OnEndpointsUpdate(instance.([]api.Endpoints))
 	}))
 }
 
@@ -128,13 +128,13 @@ func (s *endpointsStore) Merge(source string, change interface{}) error {
 	case ADD:
 		glog.V(4).Infof("Adding new endpoint from source %s : %+v", source, update.Endpoints)
 		for _, value := range update.Endpoints {
-			name := types.NamespacedName{value.Namespace, value.Name}
+			name := types.NamespacedName{Namespace: value.Namespace, Name: value.Name}
 			endpoints[name] = value
 		}
 	case REMOVE:
 		glog.V(4).Infof("Removing an endpoint %+v", update)
 		for _, value := range update.Endpoints {
-			name := types.NamespacedName{value.Namespace, value.Name}
+			name := types.NamespacedName{Namespace: value.Namespace, Name: value.Name}
 			delete(endpoints, name)
 		}
 	case SET:
@@ -142,7 +142,7 @@ func (s *endpointsStore) Merge(source string, change interface{}) error {
 		// Clear the old map entries by just creating a new map
 		endpoints = make(map[types.NamespacedName]api.Endpoints)
 		for _, value := range update.Endpoints {
-			name := types.NamespacedName{value.Namespace, value.Name}
+			name := types.NamespacedName{Namespace: value.Namespace, Name: value.Name}
 			endpoints[name] = value
 		}
 	default:
@@ -189,7 +189,7 @@ func NewServiceConfig() *ServiceConfig {
 
 func (c *ServiceConfig) RegisterHandler(handler ServiceConfigHandler) {
 	c.bcaster.Add(config.ListenerFunc(func(instance interface{}) {
-		handler.OnUpdate(instance.([]api.Service))
+		handler.OnServiceUpdate(instance.([]api.Service))
 	}))
 }
 
@@ -226,13 +226,13 @@ func (s *serviceStore) Merge(source string, change interface{}) error {
 	case ADD:
 		glog.V(4).Infof("Adding new service from source %s : %+v", source, update.Services)
 		for _, value := range update.Services {
-			name := types.NamespacedName{value.Namespace, value.Name}
+			name := types.NamespacedName{Namespace: value.Namespace, Name: value.Name}
 			services[name] = value
 		}
 	case REMOVE:
 		glog.V(4).Infof("Removing a service %+v", update)
 		for _, value := range update.Services {
-			name := types.NamespacedName{value.Namespace, value.Name}
+			name := types.NamespacedName{Namespace: value.Namespace, Name: value.Name}
 			delete(services, name)
 		}
 	case SET:
@@ -240,7 +240,7 @@ func (s *serviceStore) Merge(source string, change interface{}) error {
 		// Clear the old map entries by just creating a new map
 		services = make(map[types.NamespacedName]api.Service)
 		for _, value := range update.Services {
-			name := types.NamespacedName{value.Namespace, value.Name}
+			name := types.NamespacedName{Namespace: value.Namespace, Name: value.Name}
 			services[name] = value
 		}
 	default:

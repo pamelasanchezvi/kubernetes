@@ -35,8 +35,14 @@ function test-build-release {
   "${KUBE_ROOT}/build/release.sh"
 }
 
-# From user input set the necessary k8s and etcd configuration infomation
+# From user input set the necessary k8s and etcd configuration information
 function setClusterInfo() {
+  # Initialize MINION_IPS in setClusterInfo function
+  # MINION_IPS is defined as a global variable, and is concatenated with other nodeIP
+  # When setClusterInfo is called for many times, this could cause potential problems
+  # Such as, you will have MINION_IPS=192.168.0.2,192.168.0.3,192.168.0.2,192.168.0.3 which is obviously wrong
+  MINION_IPS=""
+  
   ii=0
   for i in $nodes
   do
@@ -202,6 +208,7 @@ KUBE_APISERVER_OPTS="--insecure-bind-address=0.0.0.0 \
 --logtostderr=true \
 --service-cluster-ip-range=${1} \
 --admission-control=${2} \
+--service-node-port-range=${3} \
 --client-ca-file=/srv/kubernetes/ca.crt \
 --tls-cert-file=/srv/kubernetes/server.cert \
 --tls-private-key-file=/srv/kubernetes/server.key"
@@ -254,7 +261,7 @@ EOF
 }
 
 # Ensure that we have a password created for validating to the master. Will
-# read from $HOME/.kubernetes_auth if available.
+# read from ${KUBECONFIG:-$DEFAULT_KUBECONFIG} if available.
 #
 # Vars set:
 #   KUBE_USER
@@ -367,11 +374,9 @@ function provision-master() {
 
   # remote login to MASTER and use sudo to configue k8s master
   ssh $SSH_OPTS -t $MASTER "source ~/kube/util.sh; \
-                            groupadd -f -r kube-cert; \
-                            ~/kube/make-ca-cert ${MASTER_IP} IP:${MASTER_IP},IP:${SERVICE_CLUSTER_IP_RANGE%.*}.1,DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc,DNS:kubernetes.default.svc.cluster.local; \
                             setClusterInfo; \
                             create-etcd-opts "${mm[${MASTER_IP}]}" "${MASTER_IP}" "${CLUSTER}"; \
-                            create-kube-apiserver-opts "${SERVICE_CLUSTER_IP_RANGE}" "${ADMISSION_CONTROL}"; \
+                            create-kube-apiserver-opts "${SERVICE_CLUSTER_IP_RANGE}" "${ADMISSION_CONTROL}" "${SERVICE_NODE_PORT_RANGE}"; \
                             create-kube-controller-manager-opts "${MINION_IPS}"; \
                             create-kube-scheduler-opts; \
                             create-flanneld-opts; \
@@ -399,7 +404,7 @@ function provision-minion() {
                          sudo -p '[sudo] password to copy files and start minion: ' cp ~/kube/default/* /etc/default/ && sudo cp ~/kube/init_conf/* /etc/init/ && sudo cp ~/kube/init_scripts/* /etc/init.d/ \
                          && sudo mkdir -p /opt/bin/ && sudo cp ~/kube/minion/* /opt/bin; \
                          sudo service etcd start; \
-                         sudo -b ~/kube/reconfDocker.sh"
+                         sudo FLANNEL_NET=${FLANNEL_NET} -b ~/kube/reconfDocker.sh"
 }
 
 function provision-masterandminion() {
@@ -413,7 +418,7 @@ function provision-masterandminion() {
   ssh $SSH_OPTS -t $MASTER "source ~/kube/util.sh; \
                             setClusterInfo; \
                             create-etcd-opts "${mm[${MASTER_IP}]}" "${MASTER_IP}" "${CLUSTER}"; \
-                            create-kube-apiserver-opts "${SERVICE_CLUSTER_IP_RANGE}" "${ADMISSION_CONTROL}"; \
+                            create-kube-apiserver-opts "${SERVICE_CLUSTER_IP_RANGE}" "${ADMISSION_CONTROL}" "${SERVICE_NODE_PORT_RANGE}"; \
                             create-kube-controller-manager-opts "${MINION_IPS}"; \
                             create-kube-scheduler-opts; \
                             create-kubelet-opts "${MASTER_IP}" "${MASTER_IP}" "${DNS_SERVER_IP}" "${DNS_DOMAIN}";
@@ -424,7 +429,7 @@ function provision-masterandminion() {
                             sudo ~/kube/make-ca-cert.sh ${MASTER_IP} IP:${MASTER_IP},IP:${SERVICE_CLUSTER_IP_RANGE%.*}.1,DNS:kubernetes,DNS:kubernetes.default,DNS:kubernetes.default.svc,DNS:kubernetes.default.svc.cluster.local; \
                             sudo mkdir -p /opt/bin/ && sudo cp ~/kube/master/* /opt/bin/ && sudo cp ~/kube/minion/* /opt/bin/; \
                             sudo service etcd start; \
-                            sudo -b ~/kube/reconfDocker.sh"
+                            sudo FLANNEL_NET=${FLANNEL_NET} -b ~/kube/reconfDocker.sh"
 }
 
 # Delete a kubernetes cluster
@@ -436,6 +441,8 @@ function kube-down {
     {
       echo "Cleaning on node ${i#*@}"
       ssh -t $i 'pgrep etcd && sudo -p "[sudo] password for cleaning etcd data: " service etcd stop && sudo rm -rf /infra*'
+      # Delete the files in order to generate a clean environment, so you can change each node's role at next deployment.
+      ssh -t $i 'rm -f /opt/bin/kube* /etc/init/kube* /etc/init.d/kube* /etc/default/kube*; rm -rf ~/kube /var/lib/kubelet'
     }
   done
   wait

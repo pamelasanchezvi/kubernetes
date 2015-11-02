@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/mount"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/volume"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/types"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/mount"
+	"k8s.io/kubernetes/pkg/volume"
 
 	"github.com/golang/glog"
 )
@@ -76,11 +76,13 @@ func (plugin *nfsPlugin) NewBuilder(spec *volume.Spec, pod *api.Pod, _ volume.Vo
 
 func (plugin *nfsPlugin) newBuilderInternal(spec *volume.Spec, pod *api.Pod, mounter mount.Interface) (volume.Builder, error) {
 	var source *api.NFSVolumeSource
-
+	var readOnly bool
 	if spec.VolumeSource.NFS != nil {
 		source = spec.VolumeSource.NFS
+		readOnly = spec.VolumeSource.NFS.ReadOnly
 	} else {
 		source = spec.PersistentVolumeSource.NFS
+		readOnly = spec.ReadOnly
 	}
 	return &nfsBuilder{
 		nfs: &nfs{
@@ -91,7 +93,8 @@ func (plugin *nfsPlugin) newBuilderInternal(spec *volume.Spec, pod *api.Pod, mou
 		},
 		server:     source.Server,
 		exportPath: source.Path,
-		readOnly:   source.ReadOnly}, nil
+		readOnly:   readOnly,
+	}, nil
 }
 
 func (plugin *nfsPlugin) NewCleaner(volName string, podUID types.UID, mounter mount.Interface) (volume.Cleaner, error) {
@@ -184,11 +187,21 @@ func (b *nfsBuilder) SetUpAt(dir string) error {
 	return nil
 }
 
+func (b *nfsBuilder) IsReadOnly() bool {
+	return b.readOnly
+}
+
+//
+//func (c *nfsCleaner) GetPath() string {
+//	name := nfsPluginName
+//	return c.plugin.host.GetPodVolumeDir(c.pod.UID, util.EscapeQualifiedNameForDisk(name), c.volName)
+//}
+
+var _ volume.Cleaner = &nfsCleaner{}
+
 type nfsCleaner struct {
 	*nfs
 }
-
-var _ volume.Cleaner = &nfsCleaner{}
 
 func (c *nfsCleaner) TearDown() error {
 	return c.TearDownAt(c.GetPath())
@@ -223,21 +236,15 @@ func (c *nfsCleaner) TearDownAt(dir string) error {
 }
 
 func newRecycler(spec *volume.Spec, host volume.VolumeHost) (volume.Recycler, error) {
-	if spec.VolumeSource.HostPath != nil {
-		return &nfsRecycler{
-			name:   spec.Name,
-			server: spec.VolumeSource.NFS.Server,
-			path:   spec.VolumeSource.NFS.Path,
-			host:   host,
-		}, nil
-	} else {
-		return &nfsRecycler{
-			name:   spec.Name,
-			server: spec.PersistentVolumeSource.NFS.Server,
-			path:   spec.PersistentVolumeSource.NFS.Path,
-			host:   host,
-		}, nil
+	if spec.PersistentVolumeSource.NFS == nil {
+		return nil, fmt.Errorf("spec.PersistentVolumeSource.NFS is nil")
 	}
+	return &nfsRecycler{
+		name:   spec.Name,
+		server: spec.PersistentVolumeSource.NFS.Server,
+		path:   spec.PersistentVolumeSource.NFS.Path,
+		host:   host,
+	}, nil
 }
 
 // nfsRecycler scrubs an NFS volume by running "rm -rf" on the volume in a pod.

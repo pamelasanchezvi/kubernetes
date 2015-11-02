@@ -54,7 +54,7 @@ kube::util::wait_for_url() {
 #   KUBE_TEMP
 kube::util::ensure-temp-dir() {
   if [[ -z ${KUBE_TEMP-} ]]; then
-    KUBE_TEMP=$(mktemp -d -t kubernetes.XXXXXX)
+    KUBE_TEMP=$(mktemp -d 2>/dev/null || mktemp -d -t kubernetes.XXXXXX)
   fi
 }
 
@@ -171,7 +171,11 @@ kube::util::gen-doc() {
   done <"${dest}/.files_generated"
 
   # put the new generated file into the destination
-  find "${tmpdir}" -exec rsync -pt {} "${dest}" \; >/dev/null
+  # the shopt is so that we get .files_generated from the glob.
+  shopt -s dotglob
+  cp -af "${tmpdir}"/* "${dest}"
+  shopt -u dotglob
+
   #cleanup
   rm -rf "${tmpdir}"
 }

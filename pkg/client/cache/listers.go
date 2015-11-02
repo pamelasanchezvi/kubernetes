@@ -19,9 +19,9 @@ package cache
 import (
 	"fmt"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/labels"
 )
 
 //  TODO: generate these classes and methods for all resources of interest using
@@ -52,7 +52,7 @@ func (s *StoreToPodLister) List(selector labels.Selector) (pods []*api.Pod, err 
 	// now.
 	for _, m := range s.Store.List() {
 		pod := m.(*api.Pod)
-		if selector.Matches(labels.Set(pod.Labels)) {
+		if selector == nil || selector.Matches(labels.Set(pod.Labels)) {
 			pods = append(pods, pod)
 		}
 	}
@@ -266,4 +266,27 @@ func (s *StoreToServiceLister) GetPodServices(pod *api.Pod) (services []api.Serv
 	return
 }
 
-// TODO: add StoreToEndpointsLister for use in kube-proxy.
+// StoreToEndpointsLister makes a Store that lists endpoints.
+type StoreToEndpointsLister struct {
+	Store
+}
+
+// List lists all endpoints in the store.
+func (s *StoreToEndpointsLister) List() (services api.EndpointsList, err error) {
+	for _, m := range s.Store.List() {
+		services.Items = append(services.Items, *(m.(*api.Endpoints)))
+	}
+	return services, nil
+}
+
+// GetServiceEndpoints returns the endpoints of a service, matched on service name.
+func (s *StoreToEndpointsLister) GetServiceEndpoints(svc *api.Service) (ep api.Endpoints, err error) {
+	for _, m := range s.Store.List() {
+		ep = *m.(*api.Endpoints)
+		if svc.Name == ep.Name && svc.Namespace == ep.Namespace {
+			return ep, nil
+		}
+	}
+	err = fmt.Errorf("Could not find endpoints for service: %v", svc.Name)
+	return
+}

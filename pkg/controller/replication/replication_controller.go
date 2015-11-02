@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package replication
+package replicationcontroller
 
 import (
 	"reflect"
@@ -22,19 +22,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/cache"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/record"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/controller"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/controller/framework"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/workqueue"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/client/cache"
+	"k8s.io/kubernetes/pkg/client/record"
+	"k8s.io/kubernetes/pkg/controller"
+	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/workqueue"
+	"k8s.io/kubernetes/pkg/watch"
 )
 
 const (
@@ -63,6 +63,8 @@ const (
 
 // ReplicationManager is responsible for synchronizing ReplicationController objects stored
 // in the system with actual running pods.
+// TODO: this really should be called ReplicationController. The only reason why it's a Manager
+// is to distinguish this type from API object "ReplicationController". We should fix this.
 type ReplicationManager struct {
 	kubeClient client.Interface
 	podControl controller.PodControlInterface
@@ -137,7 +139,7 @@ func NewReplicationManager(kubeClient client.Interface, burstReplicas int) *Repl
 				}
 				rm.enqueueController(cur)
 			},
-			// This will enter the sync loop and no-op, becuase the controller has been deleted from the store.
+			// This will enter the sync loop and no-op, because the controller has been deleted from the store.
 			// Note that deleting a controller immediately after scaling it to 0 will not work. The recommended
 			// way of achieving this is by performing a `stop` operation on the controller.
 			DeleteFunc: rm.enqueueController,
@@ -175,7 +177,7 @@ func NewReplicationManager(kubeClient client.Interface, burstReplicas int) *Repl
 func (rm *ReplicationManager) SetEventRecorder(recorder record.EventRecorder) {
 	// TODO: Hack. We can't cleanly shutdown the event recorder, so benchmarks
 	// need to pass in a fake.
-	rm.podControl = controller.RealPodControl{rm.kubeClient, recorder}
+	rm.podControl = controller.RealPodControl{KubeClient: rm.kubeClient, Recorder: recorder}
 }
 
 // Run begins watching and syncing.
@@ -191,9 +193,9 @@ func (rm *ReplicationManager) Run(workers int, stopCh <-chan struct{}) {
 	rm.queue.ShutDown()
 }
 
-// getPodControllers returns the controller managing the given pod.
+// getPodController returns the controller managing the given pod.
 // TODO: Surface that we are ignoring multiple controllers for a single pod.
-func (rm *ReplicationManager) getPodControllers(pod *api.Pod) *api.ReplicationController {
+func (rm *ReplicationManager) getPodController(pod *api.Pod) *api.ReplicationController {
 	controllers, err := rm.rcStore.GetPodControllers(pod)
 	if err != nil {
 		glog.V(4).Infof("No controllers found for pod %v, replication manager will avoid syncing", pod.Name)
@@ -211,7 +213,7 @@ func (rm *ReplicationManager) getPodControllers(pod *api.Pod) *api.ReplicationCo
 // When a pod is created, enqueue the controller that manages it and update it's expectations.
 func (rm *ReplicationManager) addPod(obj interface{}) {
 	pod := obj.(*api.Pod)
-	if rc := rm.getPodControllers(pod); rc != nil {
+	if rc := rm.getPodController(pod); rc != nil {
 		rcKey, err := controller.KeyFunc(rc)
 		if err != nil {
 			glog.Errorf("Couldn't get key for replication controller %#v: %v", rc, err)
@@ -232,7 +234,7 @@ func (rm *ReplicationManager) updatePod(old, cur interface{}) {
 	}
 	// TODO: Write a unittest for this case
 	curPod := cur.(*api.Pod)
-	if rc := rm.getPodControllers(curPod); rc != nil {
+	if rc := rm.getPodController(curPod); rc != nil {
 		rm.enqueueController(rc)
 	}
 	oldPod := old.(*api.Pod)
@@ -240,7 +242,7 @@ func (rm *ReplicationManager) updatePod(old, cur interface{}) {
 	if !reflect.DeepEqual(curPod.Labels, oldPod.Labels) {
 		// If the old and new rc are the same, the first one that syncs
 		// will set expectations preventing any damage from the second.
-		if oldRC := rm.getPodControllers(oldPod); oldRC != nil {
+		if oldRC := rm.getPodController(oldPod); oldRC != nil {
 			rm.enqueueController(oldRC)
 		}
 	}
@@ -267,7 +269,7 @@ func (rm *ReplicationManager) deletePod(obj interface{}) {
 			return
 		}
 	}
-	if rc := rm.getPodControllers(pod); rc != nil {
+	if rc := rm.getPodController(pod); rc != nil {
 		rcKey, err := controller.KeyFunc(rc)
 		if err != nil {
 			glog.Errorf("Couldn't get key for replication controller %#v: %v", rc, err)

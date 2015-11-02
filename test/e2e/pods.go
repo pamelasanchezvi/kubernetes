@@ -21,15 +21,15 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/resource"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/wait"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/errors"
+	"k8s.io/kubernetes/pkg/api/resource"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/watch"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -246,14 +246,11 @@ var _ = Describe("Pods", func() {
 		}
 
 		By("deleting the pod")
-		podClient.Delete(pod.Name, nil)
-		pods, err = podClient.List(labels.SelectorFromSet(labels.Set(map[string]string{"time": value})), fields.Everything())
-		if err != nil {
+		if err := podClient.Delete(pod.Name, nil); err != nil {
 			Failf("Failed to delete pod: %v", err)
 		}
-		Expect(len(pods.Items)).To(Equal(0))
 
-		By("veryfying pod deletion was observed")
+		By("verifying pod deletion was observed")
 		deleted := false
 		timeout := false
 		timer := time.After(podStartTimeout)
@@ -270,6 +267,12 @@ var _ = Describe("Pods", func() {
 		if !deleted {
 			Fail("Failed to observe pod deletion")
 		}
+
+		pods, err = podClient.List(labels.SelectorFromSet(labels.Set(map[string]string{"time": value})), fields.Everything())
+		if err != nil {
+			Fail(fmt.Sprintf("Failed to list pods to verify deletion: %v", err))
+		}
+		Expect(len(pods.Items)).To(Equal(0))
 	})
 
 	It("should be updated", func() {
@@ -518,6 +521,39 @@ var _ = Describe("Pods", func() {
 				},
 			},
 		}, true)
+	})
+
+	It("should *not* be restarted with a /healthz http liveness probe", func() {
+		runLivenessTest(framework.Client, framework.Namespace.Name, &api.Pod{
+			ObjectMeta: api.ObjectMeta{
+				Name:   "liveness-http",
+				Labels: map[string]string{"test": "liveness"},
+			},
+			Spec: api.PodSpec{
+				Containers: []api.Container{
+					{
+						Name:  "liveness",
+						Image: "gcr.io/google_containers/nettest:1.6",
+						// These args are garbage but the image will exit if they're not there
+						// we just care about /read serving a 200, which it always does.
+						Args: []string{
+							"-service=liveness-http",
+							"-peers=1",
+							"-namespace=" + framework.Namespace.Name},
+						Ports: []api.ContainerPort{{ContainerPort: 8080}},
+						LivenessProbe: &api.Probe{
+							Handler: api.Handler{
+								HTTPGet: &api.HTTPGetAction{
+									Path: "/read",
+									Port: util.NewIntOrStringFromInt(8080),
+								},
+							},
+							InitialDelaySeconds: 15,
+						},
+					},
+				},
+			},
+		}, false)
 	})
 
 	// The following tests for remote command execution and port forwarding are

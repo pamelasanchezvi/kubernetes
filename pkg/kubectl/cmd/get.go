@@ -20,44 +20,45 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubectl"
-	cmdutil "github.com/GoogleCloudPlatform/kubernetes/pkg/kubectl/cmd/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubectl/resource"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
-
 	"github.com/spf13/cobra"
+	"k8s.io/kubernetes/pkg/kubectl"
+	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
+	"k8s.io/kubernetes/pkg/kubectl/resource"
+	"k8s.io/kubernetes/pkg/watch"
 )
 
 const (
 	get_long = `Display one or many resources.
 
-Possible resources include (case insensitive): pods (po), services (svc),
+Possible resource types include (case insensitive): pods (po), services (svc),
 replicationcontrollers (rc), nodes (no), events (ev), componentstatuses (cs),
 limitranges (limits), persistentvolumes (pv), persistentvolumeclaims (pvc),
-resourcequotas (quota) or secrets.
+resourcequotas (quota), namespaces (ns), endpoints (ep) or secrets.
 
 By specifying the output as 'template' and providing a Go template as the value
 of the --template flag, you can filter the attributes of the fetched resource(s).`
-	get_example = `// List all pods in ps output format.
+	get_example = `# List all pods in ps output format.
 $ kubectl get pods
 
-// List all pods in ps output format with more information (such as node name).
+# List all pods in ps output format with more information (such as node name).
 $ kubectl get pods -o wide
 
-// List a single replication controller with specified NAME in ps output format.
+# List a single replication controller with specified NAME in ps output format.
 $ kubectl get replicationcontroller web
 
-// List a single pod in JSON output format.
+# List a single pod in JSON output format.
 $ kubectl get -o json pod web-pod-13je7
 
-// Return only the phase value of the specified pod.
+# List a pod identified by type and name specified in "pod.yaml" in JSON output format.
+$ kubectl get -f pod.yaml -o json
+
+# Return only the phase value of the specified pod.
 $ kubectl get -o template web-pod-13je7 --template={{.status.phase}} --api-version=v1
 
-// List all replication controllers and services together in ps output format.
+# List all replication controllers and services together in ps output format.
 $ kubectl get rc,services
 
-// List one or more resources by their type and names.
+# List one or more resources by their type and names.
 $ kubectl get rc/web service/frontend pods/web-pod-13je7`
 )
 
@@ -68,7 +69,7 @@ func NewCmdGet(f *cmdutil.Factory, out io.Writer) *cobra.Command {
 	validArgs := p.HandledResources()
 
 	cmd := &cobra.Command{
-		Use:     "get [(-o|--output=)json|yaml|template|wide|...] (RESOURCE [NAME] | RESOURCE/NAME ...)",
+		Use:     "get [(-o|--output=)json|yaml|template|wide|...] (TYPE [(NAME | -l label] | TYPE/NAME ...)",
 		Short:   "Display one or many resources",
 		Long:    get_long,
 		Example: get_example,
@@ -83,7 +84,9 @@ func NewCmdGet(f *cmdutil.Factory, out io.Writer) *cobra.Command {
 	cmd.Flags().BoolP("watch", "w", false, "After listing/getting the requested object, watch for changes.")
 	cmd.Flags().Bool("watch-only", false, "Watch for changes to the requested object(s), without listing/getting first.")
 	cmd.Flags().Bool("all-namespaces", false, "If present, list the requested object(s) across all namespaces. Namespace in current context is ignored even if specified with --namespace.")
-	kubectl.AddLabelsToColumnsFlag(cmd, &util.StringList{}, "Accepts a comma separated list of labels that are going to be presented as columns. Names are case-sensitive. You can also use multiple flag statements like -L label1 -L label2...")
+	cmd.Flags().StringSliceP("label-columns", "L", []string{}, "Accepts a comma separated list of labels that are going to be presented as columns. Names are case-sensitive. You can also use multiple flag statements like -L label1 -L label2...")
+	usage := "Filename, directory, or URL to a file identifying the resource to get from a server."
+	kubectl.AddJsonFilenameFlag(cmd, usage)
 	return cmd
 }
 
@@ -94,13 +97,17 @@ func RunGet(f *cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []string
 	allNamespaces := cmdutil.GetFlagBool(cmd, "all-namespaces")
 	mapper, typer := f.Object()
 
-	cmdNamespace, _, err := f.DefaultNamespace()
+	cmdNamespace, enforceNamespace, err := f.DefaultNamespace()
 	if err != nil {
 		return err
 	}
 
-	if len(args) == 0 {
-		fmt.Fprint(out, "You must specify the type of resource to get. ", valid_resources)
+	filenames := cmdutil.GetFlagStringSlice(cmd, "filename")
+
+	if len(args) == 0 && len(filenames) == 0 {
+		fmt.Fprint(out, "You must specify the type of resource to get. ", valid_resources, `   * componentstatuses (aka 'cs')
+   * endpoints (aka 'ep')
+`)
 		return cmdutil.UsageError(cmd, "Required resource not specified.")
 	}
 
@@ -109,19 +116,24 @@ func RunGet(f *cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []string
 	if isWatch || isWatchOnly {
 		r := resource.NewBuilder(mapper, typer, f.ClientMapperForCommand()).
 			NamespaceParam(cmdNamespace).DefaultNamespace().AllNamespaces(allNamespaces).
+			FilenameParam(enforceNamespace, filenames...).
 			SelectorParam(selector).
 			ResourceTypeOrNameArgs(true, args...).
 			SingleResourceType().
+			Latest().
 			Do()
 		if err != nil {
 			return err
 		}
-
-		mapping, err := r.ResourceMapping()
+		infos, err := r.Infos()
 		if err != nil {
 			return err
 		}
-
+		if len(infos) != 1 {
+			return fmt.Errorf("watch is only supported on a single resource - %d resources were found", len(infos))
+		}
+		info := infos[0]
+		mapping := info.ResourceMapping()
 		printer, err := f.PrinterForMapping(cmd, mapping, allNamespaces)
 		if err != nil {
 			return err
@@ -131,7 +143,6 @@ func RunGet(f *cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []string
 		if err != nil {
 			return err
 		}
-
 		rv, err := mapping.MetadataAccessor.ResourceVersion(obj)
 		if err != nil {
 			return err
@@ -158,6 +169,7 @@ func RunGet(f *cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []string
 
 	b := resource.NewBuilder(mapper, typer, f.ClientMapperForCommand()).
 		NamespaceParam(cmdNamespace).DefaultNamespace().AllNamespaces(allNamespaces).
+		FilenameParam(enforceNamespace, filenames...).
 		SelectorParam(selector).
 		ResourceTypeOrNameArgs(true, args...).
 		ContinueOnError().

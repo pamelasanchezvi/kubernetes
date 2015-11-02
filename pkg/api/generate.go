@@ -18,8 +18,13 @@ package api
 
 import (
 	"fmt"
+	"io/ioutil"
+	"strings"
+	"time"
 
-	utilrand "github.com/GoogleCloudPlatform/kubernetes/pkg/util/rand"
+	"github.com/golang/glog"
+
+	utilrand "k8s.io/kubernetes/pkg/util/rand"
 )
 
 // NameGenerator generates names for objects. Some backends may have more information
@@ -60,5 +65,50 @@ func (simpleNameGenerator) GenerateName(base string) string {
 	if len(base) > maxGeneratedNameLength {
 		base = base[:maxGeneratedNameLength]
 	}
-	return fmt.Sprintf("%s%s", base, utilrand.String(randomLength))
+	gname := getNameOfMovedPod(base)
+	fmt.Printf("$$$$$$$$$$$$$$$$ gname is %s $$$$$$$$$$$$$$$$$$$$$\n", gname)
+	if gname == "" {
+		gname = utilrand.String(randomLength)
+	}
+	fmt.Printf("$$$$$$$$$$$$$$$$ gname is %s $$$$$$$$$$$$$$$$$$$$$\n", gname)
+
+	return fmt.Sprintf("%s%s", base, gname)
+}
+
+func read(filePath string) (string, error) {
+	dat, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	fmt.Print(string(dat))
+	return string(dat), nil
+}
+
+// the info is stored in this way.
+// Action\tPod\tDestination\tMsgId.
+// TODO. This might be stored and implemented using etcd.
+func getNameOfMovedPod(base string) (name string) {
+	time.Sleep(1 * time.Second)
+	filePath := "/tmp/dat1"
+	entry, err := read(filePath)
+	if err != nil {
+		glog.Errorf("Error reading in %s: %s", filePath, err)
+		return ""
+	}
+	glog.V(3).Infof("$$$$$$$$$$$$$$$$ entry read in is %s $$$$$$$$$$$$$$$$$$$$$\n", string(entry))
+
+	content := strings.Split(string(entry), "\t")
+	if len(content) < 4 {
+		return ""
+	}
+	podName := content[1]
+	glog.V(3).Infof("$$$$$$$$$$$$$$$$ podName is %s $$$$$$$$$$$$$$$$$$$$$\n", podName)
+
+	podNameContent := strings.Split(podName, base)
+	if len(podNameContent) < 2 {
+		return ""
+	}
+
+	return podNameContent[1]
+
 }

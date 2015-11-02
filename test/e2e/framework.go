@@ -22,10 +22,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -94,7 +94,8 @@ func (f *Framework) afterEach() {
 	}
 
 	By(fmt.Sprintf("Destroying namespace %q for this suite.", f.Namespace.Name))
-	if err := f.Client.Namespaces().Delete(f.Namespace.Name); err != nil {
+
+	if err := deleteNS(f.Client, f.Namespace.Name); err != nil {
 		Failf("Couldn't delete ns %q: %s", f.Namespace.Name, err)
 	}
 	// Paranoia-- prevent reuse!

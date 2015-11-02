@@ -136,7 +136,7 @@ func (f *FakeEtcdClient) Get(key string, sort, recursive bool) (*etcd.Response, 
 	result := f.Data[key]
 	if result.R == nil {
 		if _, ok := f.expectNotFoundGetSet[key]; !ok {
-			f.t.Fatalf("data for %s was not defined prior to invoking Get", key)
+			f.t.Logf("data for %s was not defined prior to invoking Get", key)
 		}
 		return &etcd.Response{}, f.NewError(EtcdErrorCodeNotFound)
 	}
@@ -281,7 +281,8 @@ func (f *FakeEtcdClient) Delete(key string, recursive bool) (*etcd.Response, err
 			Index:     f.ChangeIndex,
 		}
 	}
-	if IsEtcdNotFound(existing.E) {
+	etcdError, ok := existing.E.(*etcd.EtcdError)
+	if ok && etcdError != nil && etcdError.ErrorCode == EtcdErrorCodeNotFound {
 		f.DeletedKeys = append(f.DeletedKeys, key)
 		return existing.R, existing.E
 	}

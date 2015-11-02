@@ -18,10 +18,10 @@ package e2e
 
 import (
 	"fmt"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/latest"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/latest"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/util"
 	"os"
 	"path"
 
@@ -29,7 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-//TODO : Consolodate this code with the code for emptyDir.
+//TODO : Consolidate this code with the code for emptyDir.
 //This will require some smart.
 var _ = Describe("hostPath", func() {
 	var (

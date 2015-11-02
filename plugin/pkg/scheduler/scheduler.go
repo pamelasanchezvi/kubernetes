@@ -20,13 +20,14 @@ package scheduler
 // contrib/mesos/pkg/scheduler/.
 
 import (
+	"fmt"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/record"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/plugin/pkg/scheduler/algorithm"
-	"github.com/GoogleCloudPlatform/kubernetes/plugin/pkg/scheduler/metrics"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client/record"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm"
+	"k8s.io/kubernetes/plugin/pkg/scheduler/metrics"
 
 	"github.com/golang/glog"
 )
@@ -73,6 +74,7 @@ type Config struct {
 	// by MinionLister and Algorithm.
 	Modeler      SystemModeler
 	MinionLister algorithm.MinionLister
+	PodLister    algorithm.PodLister
 	Algorithm    algorithm.ScheduleAlgorithm
 	Binder       Binder
 
@@ -84,6 +86,8 @@ type Config struct {
 	// a pod may take some amount of time and we don't want pods to get
 	// stale while they sit in a channel.
 	NextPod func() *api.Pod
+
+	NextNode func() *api.Node
 
 	// Error is called if there is an error. It is passed the pod in
 	// question, and the error
@@ -107,16 +111,42 @@ func New(c *Config) *Scheduler {
 
 // Run begins watching and scheduling. It starts a goroutine and returns immediately.
 func (s *Scheduler) Run() {
+	glog.V(3).Infof("---------- Start running scheduler ----------")
+
 	go util.Until(s.scheduleOne, 0, s.config.StopEverything)
+	//go util.Until(s.getNextNode, 0, s.config.StopEverything)
+}
+
+type resourceRequest struct {
+	milliCPU int64
+	memory   int64
+}
+
+func getResourceRequest(pod *api.Pod) resourceRequest {
+	result := resourceRequest{}
+	for _, container := range pod.Spec.Containers {
+		requests := container.Resources.Requests
+		result.memory += requests.Memory().Value()
+		result.milliCPU += requests.Cpu().MilliValue()
+	}
+	return result
+}
+
+func (s *Scheduler) getNextNode() {
+	fmt.Println("---------- now in getNextNode() ----------")
+	node := s.config.NextNode()
+	fmt.Println("---------- Added a new node: " + node.Name + " ----------")
 }
 
 func (s *Scheduler) scheduleOne() {
+	fmt.Println("---------- now in scheduleOne() ----------")
+
 	pod := s.config.NextPod()
 	if s.config.BindPodsRateLimiter != nil {
 		s.config.BindPodsRateLimiter.Accept()
 	}
 
-	glog.V(3).Infof("Attempting to schedule: %v", pod)
+	glog.V(3).Infof("Attempting to schedule: %+v", pod)
 	start := time.Now()
 	defer func() {
 		metrics.E2eSchedulingLatency.Observe(metrics.SinceInMicroseconds(start))
@@ -124,8 +154,8 @@ func (s *Scheduler) scheduleOne() {
 	dest, err := s.config.Algorithm.Schedule(pod, s.config.MinionLister)
 	metrics.SchedulingAlgorithmLatency.Observe(metrics.SinceInMicroseconds(start))
 	if err != nil {
-		glog.V(1).Infof("Failed to schedule: %v", pod)
-		s.config.Recorder.Eventf(pod, "failedScheduling", "%v", err)
+		glog.V(1).Infof("Failed to schedule: %+v", pod)
+		s.config.Recorder.Eventf(pod, "FailedScheduling", "%v", err)
 		s.config.Error(pod, err)
 		return
 	}
@@ -144,15 +174,76 @@ func (s *Scheduler) scheduleOne() {
 		err := s.config.Binder.Bind(b)
 		metrics.BindingLatency.Observe(metrics.SinceInMicroseconds(bindingStart))
 		if err != nil {
-			glog.V(1).Infof("Failed to bind pod: %v", err)
-			s.config.Recorder.Eventf(pod, "failedScheduling", "Binding rejected: %v", err)
+			glog.V(1).Infof("Failed to bind pod: %+v", err)
+			s.config.Recorder.Eventf(pod, "FailedScheduling", "Binding rejected: %v", err)
 			s.config.Error(pod, err)
 			return
 		}
-		s.config.Recorder.Eventf(pod, "scheduled", "Successfully assigned %v to %v", pod.Name, dest)
+		s.config.Recorder.Eventf(pod, "Scheduled", "Successfully assigned %v to %v", pod.Name, dest)
 		// tell the model to assume that this binding took effect.
 		assumed := *pod
 		assumed.Spec.NodeName = dest
 		s.config.Modeler.AssumePod(&assumed)
+
 	})
+}
+
+// The VMTSchedule get destination node from vmt service and bind the corresponding pod to the node.
+// TODO, whether to keep it here or move this to vmt service.`
+// TODO, should make the code cleaner.
+func (s *Scheduler) VMTSchedule(pod *api.Pod, dest string) {
+	if s.config.BindPodsRateLimiter != nil {
+		s.config.BindPodsRateLimiter.Accept()
+	}
+
+	start := time.Now()
+	defer func() {
+		metrics.E2eSchedulingLatency.Observe(metrics.SinceInMicroseconds(start))
+	}()
+	// dest, err := s.config.Algorithm.Schedule(pod, s.config.MinionLister)
+	metrics.SchedulingAlgorithmLatency.Observe(metrics.SinceInMicroseconds(start))
+	// if err != nil {
+	// 	glog.V(1).Infof("Failed to schedule: %+v", pod)
+	// 	s.config.Recorder.Eventf(pod, "FailedScheduling", "%v", err)
+	// 	s.config.Error(pod, err)
+	// 	return
+	// }
+	b := &api.Binding{
+		ObjectMeta: api.ObjectMeta{Namespace: pod.Namespace, Name: pod.Name},
+		Target: api.ObjectReference{
+			Kind: "Node",
+			Name: dest,
+		},
+	}
+
+	// We want to add the pod to the model iff the bind succeeds, but we don't want to race
+	// with any deletions, which happen asynchronously.
+	s.config.Modeler.LockedAction(func() {
+		bindingStart := time.Now()
+		err := s.config.Binder.Bind(b)
+		metrics.BindingLatency.Observe(metrics.SinceInMicroseconds(bindingStart))
+		if err != nil {
+			glog.V(1).Infof("Failed to bind pod: %+v", err)
+			s.config.Recorder.Eventf(pod, "FailedScheduling", "Binding rejected: %v", err)
+			s.config.Error(pod, err)
+			return
+		}
+		s.config.Recorder.Eventf(pod, "Scheduled", "Successfully assigned %v to %v", pod.Name, dest)
+		// tell the model to assume that this binding took effect.
+		assumed := *pod
+		assumed.Spec.NodeName = dest
+		s.config.Modeler.AssumePod(&assumed)
+
+	})
+}
+
+// TODO. This should be removed when the vmt reservation api works.
+// Call the built in schduling algorithm to schedule a pod
+func (s *Scheduler) VMTScheduleHelper(pod *api.Pod) (string, error) {
+	dest, err := s.config.Algorithm.Schedule(pod, s.config.MinionLister)
+	if err != nil {
+		glog.Errorf("Error Scheduling pod %+v", pod)
+		return "", fmt.Errorf("Error Scheduling pod %+v", pod)
+	}
+	return dest, nil
 }

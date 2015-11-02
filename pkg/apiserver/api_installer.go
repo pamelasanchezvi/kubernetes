@@ -25,13 +25,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/meta"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/rest"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/conversion"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	watchjson "github.com/GoogleCloudPlatform/kubernetes/pkg/watch/json"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/errors"
+	"k8s.io/kubernetes/pkg/api/meta"
+	"k8s.io/kubernetes/pkg/api/rest"
+	"k8s.io/kubernetes/pkg/conversion"
+	"k8s.io/kubernetes/pkg/runtime"
+	watchjson "k8s.io/kubernetes/pkg/watch/json"
 
 	"github.com/emicklei/go-restful"
 )
@@ -195,7 +195,7 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 		versionedDeleterObject = indirectArbitraryPointer(objectPtr)
 		isDeleter = true
 	case isDeleter:
-		gracefulDeleter = rest.GracefulDeleteAdapter{deleter}
+		gracefulDeleter = rest.GracefulDeleteAdapter{Deleter: deleter}
 	}
 
 	versionedStatusPtr, err := a.group.Creater.New(serverVersion, "Status")
@@ -204,10 +204,11 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 	}
 	versionedStatus := indirectArbitraryPointer(versionedStatusPtr)
 	var (
-		getOptions     runtime.Object
-		getOptionsKind string
-		getSubpath     bool
-		getSubpathKey  string
+		getOptions          runtime.Object
+		versionedGetOptions runtime.Object
+		getOptionsKind      string
+		getSubpath          bool
+		getSubpathKey       string
 	)
 	if isGetterWithOptions {
 		getOptions, getSubpath, getSubpathKey = getterWithOptions.NewGetOptions()
@@ -215,14 +216,19 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 		if err != nil {
 			return err
 		}
+		versionedGetOptions, err = a.group.Creater.New(serverVersion, getOptionsKind)
+		if err != nil {
+			return err
+		}
 		isGetter = true
 	}
 
 	var (
-		connectOptions     runtime.Object
-		connectOptionsKind string
-		connectSubpath     bool
-		connectSubpathKey  string
+		connectOptions          runtime.Object
+		versionedConnectOptions runtime.Object
+		connectOptionsKind      string
+		connectSubpath          bool
+		connectSubpathKey       string
 	)
 	if isConnecter {
 		connectOptions, connectSubpath, connectSubpathKey = connecter.NewConnectOptions()
@@ -231,6 +237,7 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 			if err != nil {
 				return err
 			}
+			versionedConnectOptions, err = a.group.Creater.New(serverVersion, connectOptionsKind)
 		}
 	}
 
@@ -390,7 +397,7 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 				Returns(http.StatusOK, "OK", versionedObject).
 				Writes(versionedObject)
 			if isGetterWithOptions {
-				if err := addObjectParams(ws, route, getOptions); err != nil {
+				if err := addObjectParams(ws, route, versionedGetOptions); err != nil {
 					return err
 				}
 			}
@@ -540,7 +547,7 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 			addParams(route, action.Params)
 			ws.Route(route)
 		case "PROXY": // Proxy requests to a resource.
-			// Accept all methods as per https://github.com/GoogleCloudPlatform/kubernetes/issues/3996
+			// Accept all methods as per http://issue.k8s.io/3996
 			addProxyRoute(ws, "GET", a.prefix, action.Path, proxyHandler, namespaced, kind, resource, subresource, hasSubresource, action.Params)
 			addProxyRoute(ws, "PUT", a.prefix, action.Path, proxyHandler, namespaced, kind, resource, subresource, hasSubresource, action.Params)
 			addProxyRoute(ws, "POST", a.prefix, action.Path, proxyHandler, namespaced, kind, resource, subresource, hasSubresource, action.Params)
@@ -561,8 +568,8 @@ func (a *APIInstaller) registerResourceHandlers(path string, storage rest.Storag
 					Produces("*/*").
 					Consumes("*/*").
 					Writes("string")
-				if connectOptions != nil {
-					if err := addObjectParams(ws, route, connectOptions); err != nil {
+				if versionedConnectOptions != nil {
+					if err := addObjectParams(ws, route, versionedConnectOptions); err != nil {
 						return err
 					}
 				}

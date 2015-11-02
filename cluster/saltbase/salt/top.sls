@@ -3,6 +3,9 @@ base:
     - base
     - debian-auto-upgrades
     - salt-helpers
+{% if grains.get('cloud') == 'aws' %}
+    - ntp
+{% endif %}
 
   'roles:kubernetes-pool':
     - match: grain
@@ -23,7 +26,11 @@ base:
   {% endif %}
 {% endif %}
     - logrotate
+{% if grains['cloud'] is defined and grains.cloud == 'gce' %}
+    - supervisor
+{% else %}
     - monit
+{% endif %}
 
   'roles:kubernetes-master':
     - match: grain
@@ -32,7 +39,11 @@ base:
     - kube-apiserver
     - kube-controller-manager
     - kube-scheduler
+{% if grains['cloud'] is defined and grains.cloud == 'gce' %}
+    - supervisor
+{% else %}
     - monit
+{% endif %}
 {% if grains['cloud'] is defined and not grains.cloud in [ 'aws', 'gce', 'vagrant' ] %}
     - nginx
 {% endif %}

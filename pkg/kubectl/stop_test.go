@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/testclient"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/client/testclient"
 )
 
 func TestReplicationControllerStop(t *testing.T) {
@@ -47,12 +47,17 @@ func TestReplicationControllerStop(t *testing.T) {
 	if s != expected {
 		t.Errorf("expected %s, got %s", expected, s)
 	}
-	if len(fake.Actions) != 7 {
+	actions := fake.Actions()
+	if len(actions) != 7 {
 		t.Errorf("unexpected actions: %v, expected 6 actions (get, list, get, update, get, get, delete)", fake.Actions)
 	}
-	for i, action := range []string{"get", "list", "get", "update", "get", "get", "delete"} {
-		if fake.Actions[i].Action != action+"-replicationController" {
-			t.Errorf("unexpected action: %+v, expected %s-replicationController", fake.Actions[i], action)
+	for i, verb := range []string{"get", "list", "get", "update", "get", "get", "delete"} {
+		if actions[i].GetResource() != "replicationcontrollers" {
+			t.Errorf("unexpected action: %+v, expected %s-replicationController", actions[i], verb)
+			continue
+		}
+		if actions[i].GetVerb() != verb {
+			t.Errorf("unexpected action: %+v, expected %s-replicationController", actions[i], verb)
 		}
 	}
 }
@@ -79,7 +84,7 @@ type reaperFake struct {
 }
 
 func (c *reaperFake) Pods(namespace string) client.PodInterface {
-	pods := &testclient.FakePods{c.Fake, namespace}
+	pods := &testclient.FakePods{Fake: c.Fake, Namespace: namespace}
 	if c.noSuchPod {
 		return &noSuchPod{pods}
 	}
@@ -87,7 +92,7 @@ func (c *reaperFake) Pods(namespace string) client.PodInterface {
 }
 
 func (c *reaperFake) Services(namespace string) client.ServiceInterface {
-	services := &testclient.FakeServices{c.Fake, namespace}
+	services := &testclient.FakeServices{Fake: c.Fake, Namespace: namespace}
 	if c.noDeleteService {
 		return &noDeleteService{services}
 	}
@@ -98,7 +103,7 @@ func TestSimpleStop(t *testing.T) {
 	tests := []struct {
 		fake        *reaperFake
 		kind        string
-		actions     []string
+		actions     []testclient.Action
 		expectError bool
 		test        string
 	}{
@@ -106,8 +111,11 @@ func TestSimpleStop(t *testing.T) {
 			fake: &reaperFake{
 				Fake: &testclient.Fake{},
 			},
-			kind:        "Pod",
-			actions:     []string{"get-pod", "delete-pod"},
+			kind: "Pod",
+			actions: []testclient.Action{
+				testclient.NewGetAction("pods", api.NamespaceDefault, "foo"),
+				testclient.NewDeleteAction("pods", api.NamespaceDefault, "foo"),
+			},
 			expectError: false,
 			test:        "stop pod succeeds",
 		},
@@ -115,8 +123,11 @@ func TestSimpleStop(t *testing.T) {
 			fake: &reaperFake{
 				Fake: &testclient.Fake{},
 			},
-			kind:        "Service",
-			actions:     []string{"get-service", "delete-service"},
+			kind: "Service",
+			actions: []testclient.Action{
+				testclient.NewGetAction("services", api.NamespaceDefault, "foo"),
+				testclient.NewDeleteAction("services", api.NamespaceDefault, "foo"),
+			},
 			expectError: false,
 			test:        "stop service succeeds",
 		},
@@ -126,7 +137,7 @@ func TestSimpleStop(t *testing.T) {
 				noSuchPod: true,
 			},
 			kind:        "Pod",
-			actions:     []string{},
+			actions:     []testclient.Action{},
 			expectError: true,
 			test:        "stop pod fails, no pod",
 		},
@@ -135,15 +146,17 @@ func TestSimpleStop(t *testing.T) {
 				Fake:            &testclient.Fake{},
 				noDeleteService: true,
 			},
-			kind:        "Service",
-			actions:     []string{"get-service"},
+			kind: "Service",
+			actions: []testclient.Action{
+				testclient.NewGetAction("services", api.NamespaceDefault, "foo"),
+			},
 			expectError: true,
 			test:        "stop service fails, can't delete",
 		},
 	}
 	for _, test := range tests {
 		fake := test.fake
-		reaper, err := ReaperFor(test.kind, fake)
+		reaper, err := ReaperFor(test.kind, fake, nil)
 		if err != nil {
 			t.Errorf("unexpected error: %v (%s)", err, test.test)
 		}
@@ -159,13 +172,14 @@ func TestSimpleStop(t *testing.T) {
 				t.Errorf("unexpected return: %s (%s)", s, test.test)
 			}
 		}
-		if len(test.actions) != len(fake.Actions) {
+		actions := fake.Actions()
+		if len(test.actions) != len(actions) {
 			t.Errorf("unexpected actions: %v; expected %v (%s)", fake.Actions, test.actions, test.test)
 		}
-		for i, action := range fake.Actions {
+		for i, action := range actions {
 			testAction := test.actions[i]
-			if action.Action != testAction {
-				t.Errorf("unexpected action: %v; expected %v (%s)", action, testAction, test.test)
+			if action != testAction {
+				t.Errorf("unexpected action: %#v; expected %v (%s)", action, testAction, test.test)
 			}
 		}
 	}

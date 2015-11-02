@@ -23,9 +23,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubectl"
-	cmdutil "github.com/GoogleCloudPlatform/kubernetes/pkg/kubectl/cmd/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubectl/resource"
+	"k8s.io/kubernetes/pkg/kubectl"
+	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
+	"k8s.io/kubernetes/pkg/kubectl/resource"
+	"k8s.io/kubernetes/pkg/util/errors"
 )
 
 const (
@@ -35,17 +36,20 @@ Scale also allows users to specify one or more preconditions for the scale actio
 If --current-replicas or --resource-version is specified, it is validated before the
 scale is attempted, and it is guaranteed that the precondition holds true when the
 scale is sent to the server.`
-	scale_example = `// Scale replication controller named 'foo' to 3.
+	scale_example = `# Scale replication controller named 'foo' to 3.
 $ kubectl scale --replicas=3 replicationcontrollers foo
 
-// If the replication controller named foo's current size is 2, scale foo to 3.
-$ kubectl scale --current-replicas=2 --replicas=3 replicationcontrollers foo`
+# If the replication controller named foo's current size is 2, scale foo to 3.
+$ kubectl scale --current-replicas=2 --replicas=3 replicationcontrollers foo
+
+# Scale multiple replication controllers.
+$ kubectl scale --replicas=5 rc/foo rc/bar`
 )
 
 // NewCmdScale returns a cobra command with the appropriate configuration and flags to run scale
 func NewCmdScale(f *cmdutil.Factory, out io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
-		Use: "scale [--resource-version=version] [--current-replicas=count] --replicas=COUNT RESOURCE NAME",
+		Use: "scale [--resource-version=version] [--current-replicas=count] --replicas=COUNT TYPE NAME",
 		// resize is deprecated
 		Aliases: []string{"resize"},
 		Short:   "Set a new size for a Replication Controller.",
@@ -61,6 +65,7 @@ func NewCmdScale(f *cmdutil.Factory, out io.Writer) *cobra.Command {
 	cmd.Flags().String("resource-version", "", "Precondition for resource version. Requires that the current resource version match this value in order to scale.")
 	cmd.Flags().Int("current-replicas", -1, "Precondition for current size. Requires that the current size of the replication controller match this value in order to scale.")
 	cmd.Flags().Int("replicas", -1, "The new desired number of replicas. Required.")
+	cmd.Flags().Duration("timeout", 0, "The length of time to wait before giving up on a scale operation, zero means don't wait.")
 	cmd.MarkFlagRequired("replicas")
 	cmdutil.AddOutputFlagsForMutation(cmd)
 	return cmd
@@ -74,7 +79,7 @@ func RunScale(f *cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []stri
 
 	count := cmdutil.GetFlagInt(cmd, "replicas")
 	if count < 0 {
-		return cmdutil.UsageError(cmd, "--replicas=COUNT RESOURCE NAME")
+		return cmdutil.UsageError(cmd, "--replicas=COUNT TYPE NAME")
 	}
 
 	cmdNamespace, _, err := f.DefaultNamespace()
@@ -102,10 +107,6 @@ func RunScale(f *cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []stri
 	if err != nil {
 		return err
 	}
-	if len(infos) > 1 {
-		return fmt.Errorf("multiple resources provided: %v", args)
-	}
-	info := infos[0]
 
 	scaler, err := f.Scaler(mapping)
 	if err != nil {
@@ -113,13 +114,28 @@ func RunScale(f *cmdutil.Factory, out io.Writer, cmd *cobra.Command, args []stri
 	}
 
 	resourceVersion := cmdutil.GetFlagString(cmd, "resource-version")
-	currentSize := cmdutil.GetFlagInt(cmd, "current-replicas")
-	precondition := &kubectl.ScalePrecondition{currentSize, resourceVersion}
-	retry := kubectl.NewRetryParams(kubectl.Interval, kubectl.Timeout)
-	waitForReplicas := kubectl.NewRetryParams(kubectl.Interval, kubectl.Timeout)
-	if err := scaler.Scale(info.Namespace, info.Name, uint(count), precondition, retry, waitForReplicas); err != nil {
-		return err
+	if len(resourceVersion) != 0 && len(infos) > 1 {
+		return fmt.Errorf("cannot use --resource-version with multiple controllers")
 	}
-	cmdutil.PrintSuccess(mapper, shortOutput, out, info.Mapping.Resource, info.Name, "scaled")
-	return nil
+	currentSize := cmdutil.GetFlagInt(cmd, "current-replicas")
+	if currentSize != -1 && len(infos) > 1 {
+		return fmt.Errorf("cannot use --current-replicas with multiple controllers")
+	}
+	precondition := &kubectl.ScalePrecondition{Size: currentSize, ResourceVersion: resourceVersion}
+	retry := kubectl.NewRetryParams(kubectl.Interval, kubectl.Timeout)
+	var waitForReplicas *kubectl.RetryParams
+	if timeout := cmdutil.GetFlagDuration(cmd, "timeout"); timeout != 0 {
+		waitForReplicas = kubectl.NewRetryParams(kubectl.Interval, timeout)
+	}
+
+	errs := []error{}
+	for _, info := range infos {
+		if err := scaler.Scale(info.Namespace, info.Name, uint(count), precondition, retry, waitForReplicas); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		cmdutil.PrintSuccess(mapper, shortOutput, out, info.Mapping.Resource, info.Name, "scaled")
+	}
+
+	return errors.NewAggregate(errs)
 }

@@ -22,8 +22,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/fielderrors"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/fielderrors"
 )
 
 // Selector represents a label selector.
@@ -466,7 +466,6 @@ func (p *Parser) parse() ([]Requirement, error) {
 			return nil, fmt.Errorf("found '%s', expected: identifier or 'end of string'", lit)
 		}
 	}
-	return requirements, nil
 }
 
 func (p *Parser) parseRequirement() (*Requirement, error) {
@@ -558,7 +557,6 @@ func (p *Parser) parseValues() (util.StringSet, error) {
 	default:
 		return nil, fmt.Errorf("found '%s', expected: ',', ')' or identifier", lit)
 	}
-	return util.NewStringSet(), nil
 }
 
 // parseIdentifiersList parses a (possibly empty) list of

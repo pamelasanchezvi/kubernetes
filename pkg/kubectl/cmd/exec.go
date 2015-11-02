@@ -23,24 +23,24 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/remotecommand"
-	cmdutil "github.com/GoogleCloudPlatform/kubernetes/pkg/kubectl/cmd/util"
 	"github.com/docker/docker/pkg/term"
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/client/remotecommand"
+	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
 )
 
 const (
-	exec_example = `// get output from running 'date' from pod 123456-7890, using the first container by default
+	exec_example = `# get output from running 'date' from pod 123456-7890, using the first container by default
 $ kubectl exec 123456-7890 date
 	
-// get output from running 'date' in ruby-container from pod 123456-7890
+# get output from running 'date' in ruby-container from pod 123456-7890
 $ kubectl exec 123456-7890 -c ruby-container date
 
-// switch to raw terminal mode, sends stdin to 'bash' in ruby-container from pod 123456-780
-// and sends stdout/stderr from 'bash' back to the client
+# switch to raw terminal mode, sends stdin to 'bash' in ruby-container from pod 123456-780
+# and sends stdout/stderr from 'bash' back to the client
 $ kubectl exec 123456-7890 -c ruby-container -i -t -- bash -il`
 )
 

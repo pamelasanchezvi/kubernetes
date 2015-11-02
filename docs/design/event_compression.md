@@ -38,7 +38,7 @@ This document captures the design of event compression.
 
 ## Background
 
-Kubernetes components can get into a state where they generate tons of events which are identical except for the timestamp. For example, when pulling a non-existing image, Kubelet will repeatedly generate `image_not_existing` and `container_is_waiting` events until upstream components correct the image. When this happens, the spam from the repeated events makes the entire event mechanism useless. It also appears to cause memory pressure in etcd (see [#3853](https://github.com/GoogleCloudPlatform/kubernetes/issues/3853)).
+Kubernetes components can get into a state where they generate tons of events which are identical except for the timestamp. For example, when pulling a non-existing image, Kubelet will repeatedly generate `image_not_existing` and `container_is_waiting` events until upstream components correct the image. When this happens, the spam from the repeated events makes the entire event mechanism useless. It also appears to cause memory pressure in etcd (see [#3853](http://issue.k8s.io/3853)).
 
 ## Proposal
 
@@ -49,7 +49,7 @@ Event compression should be best effort (not guaranteed). Meaning, in the worst 
 ## Design
 
 Instead of a single Timestamp, each event object [contains](http://releases.k8s.io/HEAD/pkg/api/types.go#L1111) the following fields:
- * `FirstTimestamp util.Time` 
+ * `FirstTimestamp util.Time`
    * The date/time of the first occurrence of the event.
  * `LastTimestamp util.Time`
    * The date/time of the most recent occurrence of the event.
@@ -109,11 +109,11 @@ This demonstrates what would have been 20 separate entries (indicating schedulin
 
 ## Related Pull Requests/Issues
 
- * Issue [#4073](https://github.com/GoogleCloudPlatform/kubernetes/issues/4073): Compress duplicate events
- * PR [#4157](https://github.com/GoogleCloudPlatform/kubernetes/issues/4157): Add "Update Event" to Kubernetes API
- * PR [#4206](https://github.com/GoogleCloudPlatform/kubernetes/issues/4206): Modify Event struct to allow compressing multiple recurring events in to a single event
- * PR [#4306](https://github.com/GoogleCloudPlatform/kubernetes/issues/4306): Compress recurring events in to a single event to optimize etcd storage
- * PR [#4444](https://github.com/GoogleCloudPlatform/kubernetes/pull/4444): Switch events history to use LRU cache instead of map
+ * Issue [#4073](http://issue.k8s.io/4073): Compress duplicate events
+ * PR [#4157](http://issue.k8s.io/4157): Add "Update Event" to Kubernetes API
+ * PR [#4206](http://issue.k8s.io/4206): Modify Event struct to allow compressing multiple recurring events in to a single event
+ * PR [#4306](http://issue.k8s.io/4306): Compress recurring events in to a single event to optimize etcd storage
+ * PR [#4444](http://pr.k8s.io/4444): Switch events history to use LRU cache instead of map
 
 
 <!-- BEGIN MUNGE: GENERATED_ANALYTICS -->

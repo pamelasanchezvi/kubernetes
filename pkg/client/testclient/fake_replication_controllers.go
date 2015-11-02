@@ -17,10 +17,10 @@ limitations under the License.
 package testclient
 
 import (
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/watch"
 )
 
 // FakeReplicationControllers implements ReplicationControllerInterface. Meant to be embedded into a struct to get a default
@@ -30,41 +30,48 @@ type FakeReplicationControllers struct {
 	Namespace string
 }
 
-const (
-	GetControllerAction    = "get-replicationController"
-	UpdateControllerAction = "update-replicationController"
-	WatchControllerAction  = "watch-replicationController"
-	DeleteControllerAction = "delete-replicationController"
-	ListControllerAction   = "list-replicationController"
-	CreateControllerAction = "create-replicationController"
-)
-
-func (c *FakeReplicationControllers) List(selector labels.Selector) (*api.ReplicationControllerList, error) {
-	obj, err := c.Fake.Invokes(FakeAction{Action: ListControllerAction}, &api.ReplicationControllerList{})
-	return obj.(*api.ReplicationControllerList), err
-}
-
 func (c *FakeReplicationControllers) Get(name string) (*api.ReplicationController, error) {
-	obj, err := c.Fake.Invokes(FakeAction{Action: GetControllerAction, Value: name}, &api.ReplicationController{})
+	obj, err := c.Fake.Invokes(NewGetAction("replicationcontrollers", c.Namespace, name), &api.ReplicationController{})
+	if obj == nil {
+		return nil, err
+	}
+
 	return obj.(*api.ReplicationController), err
 }
 
+func (c *FakeReplicationControllers) List(label labels.Selector) (*api.ReplicationControllerList, error) {
+	obj, err := c.Fake.Invokes(NewListAction("replicationcontrollers", c.Namespace, label, nil), &api.ReplicationControllerList{})
+	if obj == nil {
+		return nil, err
+	}
+
+	return obj.(*api.ReplicationControllerList), err
+}
+
 func (c *FakeReplicationControllers) Create(controller *api.ReplicationController) (*api.ReplicationController, error) {
-	obj, err := c.Fake.Invokes(FakeAction{Action: CreateControllerAction, Value: controller}, &api.ReplicationController{})
+	obj, err := c.Fake.Invokes(NewCreateAction("replicationcontrollers", c.Namespace, controller), controller)
+	if obj == nil {
+		return nil, err
+	}
+
 	return obj.(*api.ReplicationController), err
 }
 
 func (c *FakeReplicationControllers) Update(controller *api.ReplicationController) (*api.ReplicationController, error) {
-	obj, err := c.Fake.Invokes(FakeAction{Action: UpdateControllerAction, Value: controller}, &api.ReplicationController{})
+	obj, err := c.Fake.Invokes(NewUpdateAction("replicationcontrollers", c.Namespace, controller), controller)
+	if obj == nil {
+		return nil, err
+	}
+
 	return obj.(*api.ReplicationController), err
 }
 
 func (c *FakeReplicationControllers) Delete(name string) error {
-	_, err := c.Fake.Invokes(FakeAction{Action: DeleteControllerAction, Value: name}, &api.ReplicationController{})
+	_, err := c.Fake.Invokes(NewDeleteAction("replicationcontrollers", c.Namespace, name), &api.ReplicationController{})
 	return err
 }
 
 func (c *FakeReplicationControllers) Watch(label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
-	c.Fake.Actions = append(c.Fake.Actions, FakeAction{Action: WatchControllerAction, Value: resourceVersion})
+	c.Fake.Invokes(NewWatchAction("replicationcontrollers", c.Namespace, label, field, resourceVersion), nil)
 	return c.Fake.Watch, nil
 }

@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util"
 )
 
 // The only difference between ServiceGeneratorV1 and V2 is that the service port is named "default" in V1, while it is left unnamed in V2.
@@ -32,7 +32,7 @@ func (ServiceGeneratorV1) ParamNames() []GeneratorParam {
 	return paramNames()
 }
 
-func (ServiceGeneratorV1) Generate(params map[string]string) (runtime.Object, error) {
+func (ServiceGeneratorV1) Generate(params map[string]interface{}) (runtime.Object, error) {
 	params["port-name"] = "default"
 	return generate(params)
 }
@@ -43,7 +43,7 @@ func (ServiceGeneratorV2) ParamNames() []GeneratorParam {
 	return paramNames()
 }
 
-func (ServiceGeneratorV2) Generate(params map[string]string) (runtime.Object, error) {
+func (ServiceGeneratorV2) Generate(params map[string]interface{}) (runtime.Object, error) {
 	return generate(params)
 }
 
@@ -61,10 +61,19 @@ func paramNames() []GeneratorParam {
 		{"container-port", false}, // alias of target-port
 		{"target-port", false},
 		{"port-name", false},
+		{"session-affinity", false},
 	}
 }
 
-func generate(params map[string]string) (runtime.Object, error) {
+func generate(genericParams map[string]interface{}) (runtime.Object, error) {
+	params := map[string]string{}
+	for key, value := range genericParams {
+		strVal, isString := value.(string)
+		if !isString {
+			return nil, fmt.Errorf("expected string, saw %v for '%s'", value, key)
+		}
+		params[key] = strVal
+	}
 	selectorString, found := params["selector"]
 	if !found || len(selectorString) == 0 {
 		return nil, fmt.Errorf("'selector' is a required parameter.")
@@ -140,6 +149,16 @@ func generate(params map[string]string) (runtime.Object, error) {
 	}
 	if len(params["type"]) != 0 {
 		service.Spec.Type = api.ServiceType(params["type"])
+	}
+	if len(params["session-affinity"]) != 0 {
+		switch api.ServiceAffinity(params["session-affinity"]) {
+		case api.ServiceAffinityNone:
+			service.Spec.SessionAffinity = api.ServiceAffinityNone
+		case api.ServiceAffinityClientIP:
+			service.Spec.SessionAffinity = api.ServiceAffinityClientIP
+		default:
+			return nil, fmt.Errorf("unknown session affinity: %s", params["session-affinity"])
+		}
 	}
 	return &service, nil
 }

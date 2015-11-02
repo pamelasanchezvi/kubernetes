@@ -101,7 +101,7 @@ spec:
 ```
 
 [Download example](redis-master-controller.yaml)
-<!-- END MUNGE: EXAMPLE -->
+<!-- END MUNGE: EXAMPLE redis-master-controller.yaml -->
 
 Change to the `<kubernetes>/examples/guestbook` directory if you're not already there. Create the redis master pod in your Kubernetes cluster by running:
 
@@ -222,7 +222,7 @@ spec:
 ```
 
 [Download example](redis-master-service.yaml)
-<!-- END MUNGE: EXAMPLE -->
+<!-- END MUNGE: EXAMPLE redis-master-service.yaml -->
 
 Create the service by running:
 
@@ -235,8 +235,9 @@ Then check the list of services, which should include the redis-master:
 
 ```console
 $ kubectl get services
-NAME                    LABELS                                    SELECTOR                     IP                  PORT
-redis-master            name=redis-master                         name=redis-master            10.0.246.242        6379
+NAME              CLUSTER_IP       EXTERNAL_IP       PORT(S)       SELECTOR               AGE
+redis-master      10.0.136.3       <none>            6379/TCP      app=redis,role=master  1h
+...
 ```
 
 This will cause all pods to see the redis master apparently running on <ip>:6379.  A service can map an incoming port to any `targetPort` in the backend pod.  Once created, the service proxy on each node is configured to set up a proxy on the specified port (in this case port 6379).
@@ -296,7 +297,7 @@ spec:
 ```
 
 [Download example](redis-slave-controller.yaml)
-<!-- END MUNGE: EXAMPLE -->
+<!-- END MUNGE: EXAMPLE redis-slave-controller.yaml -->
 
 and create the replication controller by running:
 
@@ -347,7 +348,7 @@ spec:
 ```
 
 [Download example](redis-slave-service.yaml)
-<!-- END MUNGE: EXAMPLE -->
+<!-- END MUNGE: EXAMPLE redis-slave-service.yaml -->
 
 This time the selector for the service is `name=redis-slave`, because that identifies the pods running redis slaves. It may also be helpful to set labels on your service itself as we've done here to make it easy to locate them with the `kubectl get services -l "label=value"` command.
 
@@ -358,9 +359,9 @@ $ kubectl create -f examples/guestbook/redis-slave-service.yaml
 services/redis-slave
 
 $ kubectl get services
-NAME                    LABELS                                    SELECTOR                     IP                  PORT
-redis-master            name=redis-master                         name=redis-master            10.0.246.242        6379
-redis-slave             name=redis-slave                          name=redis-slave             10.0.72.62          6379
+NAME              CLUSTER_IP       EXTERNAL_IP       PORT(S)       SELECTOR               AGE
+redis-master      10.0.136.3       <none>            6379/TCP      app=redis,role=master  1h
+redis-slave       10.0.21.92       <none>            6379/TCP      app-redis,role=slave   1h
 ```
 
 ### Step Five: Create the frontend replicated pods
@@ -392,13 +393,13 @@ spec:
     spec:
       containers:
       - name: php-redis
-        image: kubernetes/example-guestbook-php-redis:v2
+        image: gcr.io/google_containers/example-guestbook-php-redis:v3
         ports:
         - containerPort: 80
 ```
 
 [Download example](frontend-controller.yaml)
-<!-- END MUNGE: EXAMPLE -->
+<!-- END MUNGE: EXAMPLE frontend-controller.yaml -->
 
 Using this file, you can turn up your frontend with:
 
@@ -501,7 +502,7 @@ spec:
 ```
 
 [Download example](frontend-service.yaml)
-<!-- END MUNGE: EXAMPLE -->
+<!-- END MUNGE: EXAMPLE frontend-service.yaml -->
 
 #### Using 'type: LoadBalancer' for the frontend service (cloud-provider-specific)
 
@@ -525,10 +526,10 @@ Then, list all your services again:
 
 ```console
 $ kubectl get services
-NAME                    LABELS                                    SELECTOR                     IP                  PORT(S)
-frontend                name=frontend                             name=frontend                10.0.93.211         80/TCP
-redis-master            name=redis-master                         name=redis-master            10.0.246.242        6379/TCP
-redis-slave             name=redis-slave                          name=redis-slave             10.0.72.62          6379/TCP
+NAME              CLUSTER_IP       EXTERNAL_IP       PORT(S)       SELECTOR               AGE
+frontend          10.0.93.211      <none>            80/TCP        name=frontend          1h
+redis-master      10.0.136.3       <none>            6379/TCP      app=redis,role=master  1h
+redis-slave       10.0.21.92       <none>            6379/TCP      app-redis,role=slave   1h
 ```
 
 
@@ -544,11 +545,10 @@ If the `LoadBalancer` specification is used, it can take a short period for an e
 
 ```console
 $ kubectl get services
-NAME                    LABELS                                    SELECTOR                     IP                  PORT(S)
-frontend                name=frontend                             name=frontend                10.0.93.211         80/TCP
-                                                                                               130.211.135.84
-redis-master            name=redis-master                         name=redis-master            10.0.246.242        6379/TCP
-redis-slave             name=redis-slave                          name=redis-slave             10.0.72.62          6379/TCP
+NAME              CLUSTER_IP       EXTERNAL_IP       PORT(S)       SELECTOR               AGE
+frontend          10.0.93.211      130.211.188.51    80/TCP        name=frontend          1h
+redis-master      10.0.136.3       <none>            6379/TCP      app=redis,role=master  1h
+redis-slave       10.0.21.92       <none>            6379/TCP      app-redis,role=slave   1h
 ```
 
 Once you've exposed the service to an external IP, visit the IP to see your guestbook in action. E.g., `http://130.211.188.51:80` in the example above.

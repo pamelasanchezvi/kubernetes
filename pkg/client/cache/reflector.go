@@ -29,12 +29,12 @@ import (
 	"syscall"
 	"time"
 
-	apierrs "github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/meta"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
 	"github.com/golang/glog"
+	apierrs "k8s.io/kubernetes/pkg/api/errors"
+	"k8s.io/kubernetes/pkg/api/meta"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/watch"
 )
 
 // ListerWatcher is any object that knows how to perform an initial list and start a watch on a resource.
@@ -135,13 +135,13 @@ outer:
 // Run starts a watch and handles watch events. Will restart the watch if it is closed.
 // Run starts a goroutine and returns immediately.
 func (r *Reflector) Run() {
-	go util.Forever(func() { r.listAndWatch(util.NeverStop) }, r.period)
+	go util.Forever(func() { r.ListAndWatch(util.NeverStop) }, r.period)
 }
 
 // RunUntil starts a watch and handles watch events. Will restart the watch if it is closed.
 // RunUntil starts a goroutine and returns immediately. It will exit when stopCh is closed.
 func (r *Reflector) RunUntil(stopCh <-chan struct{}) {
-	go util.Until(func() { r.listAndWatch(stopCh) }, r.period, stopCh)
+	go util.Until(func() { r.ListAndWatch(stopCh) }, r.period, stopCh)
 }
 
 var (
@@ -170,30 +170,27 @@ func (r *Reflector) resyncChan() (<-chan time.Time, func() bool) {
 	return t.C, t.Stop
 }
 
-func (r *Reflector) listAndWatch(stopCh <-chan struct{}) {
+// Returns error if ListAndWatch didn't even tried to initialize watch.
+func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 	var resourceVersion string
 	resyncCh, cleanup := r.resyncChan()
 	defer cleanup()
 
 	list, err := r.listerWatcher.List()
 	if err != nil {
-		util.HandleError(fmt.Errorf("%s: Failed to list %v: %v", r.name, r.expectedType, err))
-		return
+		return fmt.Errorf("%s: Failed to list %v: %v", r.name, r.expectedType, err)
 	}
 	meta, err := meta.Accessor(list)
 	if err != nil {
-		util.HandleError(fmt.Errorf("%s: Unable to understand list result %#v", r.name, list))
-		return
+		return fmt.Errorf("%s: Unable to understand list result %#v", r.name, list)
 	}
 	resourceVersion = meta.ResourceVersion()
 	items, err := runtime.ExtractList(list)
 	if err != nil {
-		util.HandleError(fmt.Errorf("%s: Unable to understand list result %#v (%v)", r.name, list, err))
-		return
+		return fmt.Errorf("%s: Unable to understand list result %#v (%v)", r.name, list, err)
 	}
-	if err := r.syncWith(items); err != nil {
-		util.HandleError(fmt.Errorf("%s: Unable to sync list result: %v", r.name, err))
-		return
+	if err := r.syncWith(items, resourceVersion); err != nil {
+		return fmt.Errorf("%s: Unable to sync list result: %v", r.name, err)
 	}
 	r.setLastSyncResourceVersion(resourceVersion)
 
@@ -220,24 +217,28 @@ func (r *Reflector) listAndWatch(stopCh <-chan struct{}) {
 					}
 				}
 			}
-			return
+			return nil
 		}
 		if err := r.watchHandler(w, &resourceVersion, resyncCh, stopCh); err != nil {
 			if err != errorResyncRequested && err != errorStopRequested {
-				util.HandleError(fmt.Errorf("%s: watch of %v ended with: %v", r.name, r.expectedType, err))
+				glog.Warningf("%s: watch of %v ended with: %v", r.name, r.expectedType, err)
 			}
-			return
+			return nil
 		}
 	}
 }
 
 // syncWith replaces the store's items with the given list.
-func (r *Reflector) syncWith(items []runtime.Object) error {
+func (r *Reflector) syncWith(items []runtime.Object, resourceVersion string) error {
 	found := make([]interface{}, 0, len(items))
 	for _, item := range items {
 		found = append(found, item)
 	}
 
+	myStore, ok := r.store.(*WatchCache)
+	if ok {
+		return myStore.ReplaceWithVersion(found, resourceVersion)
+	}
 	return r.store.Replace(found)
 }
 
@@ -273,6 +274,7 @@ loop:
 				util.HandleError(fmt.Errorf("%s: unable to understand watch event %#v", r.name, event))
 				continue
 			}
+			newResourceVersion := meta.ResourceVersion()
 			switch event.Type {
 			case watch.Added:
 				r.store.Add(event.Object)
@@ -286,8 +288,8 @@ loop:
 			default:
 				util.HandleError(fmt.Errorf("%s: unable to understand watch event %#v", r.name, event))
 			}
-			*resourceVersion = meta.ResourceVersion()
-			r.setLastSyncResourceVersion(*resourceVersion)
+			*resourceVersion = newResourceVersion
+			r.setLastSyncResourceVersion(newResourceVersion)
 			eventCount++
 		}
 	}

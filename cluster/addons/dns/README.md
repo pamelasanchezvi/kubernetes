@@ -89,8 +89,8 @@ of this yourself.  First, each kubelet needs to run with the following flags
 set:
 
 ```
---cluster_dns=<DNS service ip>
---cluster_domain=<default local domain>
+--cluster-dns=<DNS service ip>
+--cluster-domain=<default local domain>
 ```
 
 Second, you need to start the DNS server ReplicationController and Service. See
@@ -164,7 +164,7 @@ If you see that, DNS is working correctly.
 
 ## How does it work?
 SkyDNS depends on etcd for what to serve, but it doesn't really need all of
-what etcd offers (at least not in the way we use it).  For simplicty, we run
+what etcd offers (at least not in the way we use it).  For simplicity, we run
 etcd and SkyDNS together in a pod, and we do not try to link etcd instances
 across replicas.  A helper container called [kube2sky](kube2sky/) also runs in
 the pod and acts a bridge between Kubernetes and SkyDNS.  It finds the

@@ -22,32 +22,34 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
-	etcderrors "github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors/etcd"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/latest"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/rest"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/rest/resttest"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/registry/pod"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/securitycontext"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/tools"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/tools/etcdtest"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/errors"
+	etcderrors "k8s.io/kubernetes/pkg/api/errors/etcd"
+	"k8s.io/kubernetes/pkg/api/latest"
+	"k8s.io/kubernetes/pkg/api/rest"
+	"k8s.io/kubernetes/pkg/api/rest/resttest"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/registry/pod"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/securitycontext"
+	"k8s.io/kubernetes/pkg/storage"
+	etcdstorage "k8s.io/kubernetes/pkg/storage/etcd"
+	"k8s.io/kubernetes/pkg/tools"
+	"k8s.io/kubernetes/pkg/tools/etcdtest"
+	"k8s.io/kubernetes/pkg/util"
 
 	"github.com/coreos/go-etcd/etcd"
 )
 
-func newEtcdStorage(t *testing.T) (*tools.FakeEtcdClient, tools.StorageInterface) {
+func newEtcdStorage(t *testing.T) (*tools.FakeEtcdClient, storage.Interface) {
 	fakeEtcdClient := tools.NewFakeEtcdClient(t)
 	fakeEtcdClient.TestIndex = true
-	etcdStorage := tools.NewEtcdStorage(fakeEtcdClient, latest.Codec, etcdtest.PathPrefix())
+	etcdStorage := etcdstorage.NewEtcdStorage(fakeEtcdClient, latest.Codec, etcdtest.PathPrefix())
 	return fakeEtcdClient, etcdStorage
 }
 
-func newStorage(t *testing.T) (*REST, *BindingREST, *StatusREST, *tools.FakeEtcdClient, tools.StorageInterface) {
+func newStorage(t *testing.T) (*REST, *BindingREST, *StatusREST, *tools.FakeEtcdClient, storage.Interface) {
 	fakeEtcdClient, etcdStorage := newEtcdStorage(t)
 	storage := NewStorage(etcdStorage, nil)
 	return storage.Pod, storage.Binding, storage.Status, fakeEtcdClient, etcdStorage
@@ -386,33 +388,6 @@ func TestPodDecode(t *testing.T) {
 	}
 }
 
-func TestGet(t *testing.T) {
-	expect := validNewPod()
-	expect.Status.Phase = api.PodRunning
-	expect.Spec.NodeName = "machine"
-
-	fakeEtcdClient, etcdStorage := newEtcdStorage(t)
-	key := etcdtest.AddPrefix("/pods/test/foo")
-	fakeEtcdClient.Data[key] = tools.EtcdResponseWithError{
-		R: &etcd.Response{
-			Node: &etcd.Node{
-				Value: runtime.EncodeOrDie(latest.Codec, expect),
-			},
-		},
-	}
-	storage := NewStorage(etcdStorage, nil).Pod
-
-	obj, err := storage.Get(api.WithNamespace(api.NewContext(), "test"), "foo")
-	pod := obj.(*api.Pod)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if e, a := expect, pod; !api.Semantic.DeepEqual(e, a) {
-		t.Errorf("Unexpected pod: %s", util.ObjectDiff(e, a))
-	}
-}
-
 // TODO: remove, this is covered by RESTTest.TestCreate
 func TestPodStorageValidatesCreate(t *testing.T) {
 	fakeEtcdClient, etcdStorage := newEtcdStorage(t)
@@ -659,79 +634,12 @@ func TestDeletePod(t *testing.T) {
 	}
 }
 
-// TestEtcdGetDifferentNamespace ensures same-name pods in different namespaces do not clash
-func TestEtcdGetDifferentNamespace(t *testing.T) {
-	registry, _, _, fakeClient, _ := newStorage(t)
-
-	ctx1 := api.NewDefaultContext()
-	ctx2 := api.WithNamespace(api.NewContext(), "other")
-
-	key1, _ := registry.KeyFunc(ctx1, "foo")
-	key2, _ := registry.KeyFunc(ctx2, "foo")
-
-	key1 = etcdtest.AddPrefix(key1)
-	key2 = etcdtest.AddPrefix(key2)
-
-	fakeClient.Set(key1, runtime.EncodeOrDie(latest.Codec, &api.Pod{ObjectMeta: api.ObjectMeta{Namespace: "default", Name: "foo"}}), 0)
-	fakeClient.Set(key2, runtime.EncodeOrDie(latest.Codec, &api.Pod{ObjectMeta: api.ObjectMeta{Namespace: "other", Name: "foo"}}), 0)
-
-	obj, err := registry.Get(ctx1, "foo")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	pod1 := obj.(*api.Pod)
-	if pod1.Name != "foo" {
-		t.Errorf("Unexpected pod: %#v", pod1)
-	}
-	if pod1.Namespace != "default" {
-		t.Errorf("Unexpected pod: %#v", pod1)
-	}
-
-	obj, err = registry.Get(ctx2, "foo")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	pod2 := obj.(*api.Pod)
-	if pod2.Name != "foo" {
-		t.Errorf("Unexpected pod: %#v", pod2)
-	}
-	if pod2.Namespace != "other" {
-		t.Errorf("Unexpected pod: %#v", pod2)
-	}
-
-}
-
 func TestEtcdGet(t *testing.T) {
-	registry, _, _, fakeClient, _ := newStorage(t)
-	ctx := api.NewDefaultContext()
-	key, _ := registry.KeyFunc(ctx, "foo")
-	key = etcdtest.AddPrefix(key)
-	fakeClient.Set(key, runtime.EncodeOrDie(latest.Codec, &api.Pod{ObjectMeta: api.ObjectMeta{Name: "foo"}}), 0)
-	obj, err := registry.Get(ctx, "foo")
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	pod := obj.(*api.Pod)
-	if pod.Name != "foo" {
-		t.Errorf("Unexpected pod: %#v", pod)
-	}
-}
-
-func TestEtcdGetNotFound(t *testing.T) {
-	registry, _, _, fakeClient, _ := newStorage(t)
-	ctx := api.NewDefaultContext()
-	key, _ := registry.KeyFunc(ctx, "foo")
-	key = etcdtest.AddPrefix(key)
-	fakeClient.Data[key] = tools.EtcdResponseWithError{
-		R: &etcd.Response{
-			Node: nil,
-		},
-		E: tools.EtcdErrorNotFound,
-	}
-	_, err := registry.Get(ctx, "foo")
-	if !errors.IsNotFound(err) {
-		t.Errorf("Unexpected error returned: %#v", err)
-	}
+	fakeEtcdClient, etcdStorage := newEtcdStorage(t)
+	storage := NewStorage(etcdStorage, nil).Pod
+	test := resttest.New(t, storage, fakeEtcdClient.SetError)
+	pod := validNewPod()
+	test.TestGet(pod)
 }
 
 func TestEtcdCreate(t *testing.T) {

@@ -38,4 +38,7 @@ const (
 	// until heapster can transition to using the SSL endpoint.
 	// TODO(roberthbailey): Remove this once we have a better solution for heapster.
 	KubeletReadOnlyPort = 10255
+
+	// The default port for vmt service server
+	VMTPort = 10265
 )

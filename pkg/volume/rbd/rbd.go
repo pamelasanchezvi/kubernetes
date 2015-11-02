@@ -19,13 +19,13 @@ package rbd
 import (
 	"fmt"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/exec"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/mount"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/volume"
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/types"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/exec"
+	"k8s.io/kubernetes/pkg/util/mount"
+	"k8s.io/kubernetes/pkg/volume"
 )
 
 // This is the primary entrypoint for volume plugins.
@@ -39,6 +39,7 @@ type rbdPlugin struct {
 }
 
 var _ volume.VolumePlugin = &rbdPlugin{}
+var _ volume.PersistentVolumePlugin = &rbdPlugin{}
 
 const (
 	rbdPluginName = "kubernetes.io/rbd"
@@ -74,7 +75,7 @@ func (plugin *rbdPlugin) GetAccessModes() []api.PersistentVolumeAccessMode {
 
 func (plugin *rbdPlugin) NewBuilder(spec *volume.Spec, pod *api.Pod, _ volume.VolumeOptions, mounter mount.Interface) (volume.Builder, error) {
 	secret := ""
-	source := plugin.getRBDVolumeSource(spec)
+	source, _ := plugin.getRBDVolumeSource(spec)
 
 	if source.SecretRef != nil {
 		kubeClient := plugin.host.GetKubeClient()
@@ -97,16 +98,18 @@ func (plugin *rbdPlugin) NewBuilder(spec *volume.Spec, pod *api.Pod, _ volume.Vo
 	return plugin.newBuilderInternal(spec, pod.UID, &RBDUtil{}, mounter, secret)
 }
 
-func (plugin *rbdPlugin) getRBDVolumeSource(spec *volume.Spec) *api.RBDVolumeSource {
+func (plugin *rbdPlugin) getRBDVolumeSource(spec *volume.Spec) (*api.RBDVolumeSource, bool) {
+	// rbd volumes used directly in a pod have a ReadOnly flag set by the pod author.
+	// rbd volumes used as a PersistentVolume gets the ReadOnly flag indirectly through the persistent-claim volume used to mount the PV
 	if spec.VolumeSource.RBD != nil {
-		return spec.VolumeSource.RBD
+		return spec.VolumeSource.RBD, spec.VolumeSource.RBD.ReadOnly
 	} else {
-		return spec.PersistentVolumeSource.RBD
+		return spec.PersistentVolumeSource.RBD, spec.ReadOnly
 	}
 }
 
 func (plugin *rbdPlugin) newBuilderInternal(spec *volume.Spec, podUID types.UID, manager diskManager, mounter mount.Interface, secret string) (volume.Builder, error) {
-	source := plugin.getRBDVolumeSource(spec)
+	source, readOnly := plugin.getRBDVolumeSource(spec)
 	pool := source.RBDPool
 	if pool == "" {
 		pool = "rbd"
@@ -126,7 +129,7 @@ func (plugin *rbdPlugin) newBuilderInternal(spec *volume.Spec, podUID types.UID,
 			volName:  spec.Name,
 			Image:    source.RBDImage,
 			Pool:     pool,
-			ReadOnly: source.ReadOnly,
+			ReadOnly: readOnly,
 			manager:  manager,
 			mounter:  mounter,
 			plugin:   plugin,
@@ -145,13 +148,18 @@ func (plugin *rbdPlugin) NewCleaner(volName string, podUID types.UID, mounter mo
 }
 
 func (plugin *rbdPlugin) newCleanerInternal(volName string, podUID types.UID, manager diskManager, mounter mount.Interface) (volume.Cleaner, error) {
-	return &rbdCleaner{&rbd{
-		podUID:  podUID,
-		volName: volName,
-		manager: manager,
-		mounter: mounter,
-		plugin:  plugin,
-	}}, nil
+	return &rbdCleaner{
+		rbdBuilder: &rbdBuilder{
+			rbd: &rbd{
+				podUID:  podUID,
+				volName: volName,
+				manager: manager,
+				mounter: mounter,
+				plugin:  plugin,
+			},
+			Mon: make([]string, 0),
+		},
+	}, nil
 }
 
 type rbd struct {
@@ -208,10 +216,14 @@ func (b *rbdBuilder) SetUpAt(dir string) error {
 }
 
 type rbdCleaner struct {
-	*rbd
+	*rbdBuilder
 }
 
 var _ volume.Cleaner = &rbdCleaner{}
+
+func (b *rbd) IsReadOnly() bool {
+	return b.ReadOnly
+}
 
 // Unmounts the bind mount, and detaches the disk only if the disk
 // resource was the last reference to that disk on the kubelet.

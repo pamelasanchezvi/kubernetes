@@ -26,14 +26,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/testapi"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/testclient"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/testapi"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/client/testclient"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/wait"
 )
 
 type updaterFake struct {
@@ -70,23 +70,23 @@ type fakeRc struct {
 }
 
 func (c *fakeRc) Get(name string) (*api.ReplicationController, error) {
-	action := testclient.FakeAction{Action: "get-controller", Value: name}
+	action := testclient.NewGetAction("replicationcontrollers", "", name)
 	if len(c.responses) == 0 {
 		return nil, fmt.Errorf("Unexpected Action: %s", action)
 	}
-	c.Fake.Actions = append(c.Fake.Actions, action)
+	c.Fake.Invokes(action, nil)
 	result := c.responses[0]
 	c.responses = c.responses[1:]
 	return result.controller, result.err
 }
 
 func (c *fakeRc) Create(controller *api.ReplicationController) (*api.ReplicationController, error) {
-	c.Fake.Actions = append(c.Fake.Actions, testclient.FakeAction{Action: "create-controller", Value: controller.ObjectMeta.Name})
+	c.Fake.Invokes(testclient.NewCreateAction("replicationcontrollers", controller.Namespace, controller), nil)
 	return controller, nil
 }
 
 func (c *fakeRc) Update(controller *api.ReplicationController) (*api.ReplicationController, error) {
-	c.Fake.Actions = append(c.Fake.Actions, testclient.FakeAction{Action: "update-controller", Value: controller.ObjectMeta.Name})
+	c.Fake.Invokes(testclient.NewUpdateAction("replicationcontrollers", controller.Namespace, controller), nil)
 	return controller, nil
 }
 

@@ -17,10 +17,10 @@ limitations under the License.
 package testclient
 
 import (
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/watch"
 )
 
 // FakeServiceAccounts implements ServiceAccountsInterface. Meant to be embedded into a struct to get a default
@@ -30,32 +30,48 @@ type FakeServiceAccounts struct {
 	Namespace string
 }
 
-func (c *FakeServiceAccounts) List(labels labels.Selector, field fields.Selector) (*api.ServiceAccountList, error) {
-	obj, err := c.Fake.Invokes(FakeAction{Action: "list-serviceaccounts"}, &api.ServiceAccountList{})
-	return obj.(*api.ServiceAccountList), err
-}
-
 func (c *FakeServiceAccounts) Get(name string) (*api.ServiceAccount, error) {
-	obj, err := c.Fake.Invokes(FakeAction{Action: "get-serviceaccount", Value: name}, &api.ServiceAccount{})
+	obj, err := c.Fake.Invokes(NewGetAction("serviceaccounts", c.Namespace, name), &api.ServiceAccount{})
+	if obj == nil {
+		return nil, err
+	}
+
 	return obj.(*api.ServiceAccount), err
 }
 
+func (c *FakeServiceAccounts) List(label labels.Selector, field fields.Selector) (*api.ServiceAccountList, error) {
+	obj, err := c.Fake.Invokes(NewListAction("serviceaccounts", c.Namespace, label, field), &api.ServiceAccountList{})
+	if obj == nil {
+		return nil, err
+	}
+
+	return obj.(*api.ServiceAccountList), err
+}
+
 func (c *FakeServiceAccounts) Create(serviceAccount *api.ServiceAccount) (*api.ServiceAccount, error) {
-	obj, err := c.Fake.Invokes(FakeAction{Action: "create-serviceaccount", Value: serviceAccount}, &api.ServiceAccount{})
+	obj, err := c.Fake.Invokes(NewCreateAction("serviceaccounts", c.Namespace, serviceAccount), serviceAccount)
+	if obj == nil {
+		return nil, err
+	}
+
 	return obj.(*api.ServiceAccount), err
 }
 
 func (c *FakeServiceAccounts) Update(serviceAccount *api.ServiceAccount) (*api.ServiceAccount, error) {
-	obj, err := c.Fake.Invokes(FakeAction{Action: "update-serviceaccount", Value: serviceAccount}, &api.ServiceAccount{})
+	obj, err := c.Fake.Invokes(NewUpdateAction("serviceaccounts", c.Namespace, serviceAccount), serviceAccount)
+	if obj == nil {
+		return nil, err
+	}
+
 	return obj.(*api.ServiceAccount), err
 }
 
 func (c *FakeServiceAccounts) Delete(name string) error {
-	_, err := c.Fake.Invokes(FakeAction{Action: "delete-serviceaccount", Value: name}, &api.ServiceAccount{})
+	_, err := c.Fake.Invokes(NewDeleteAction("serviceaccounts", c.Namespace, name), &api.ServiceAccount{})
 	return err
 }
 
 func (c *FakeServiceAccounts) Watch(label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
-	c.Fake.Actions = append(c.Fake.Actions, FakeAction{Action: "watch-serviceAccounts", Value: resourceVersion})
-	return c.Fake.Watch, c.Fake.Err
+	c.Fake.Invokes(NewWatchAction("serviceaccounts", c.Namespace, label, field, resourceVersion), nil)
+	return c.Fake.Watch, c.Fake.Err()
 }

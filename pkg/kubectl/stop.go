@@ -21,10 +21,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/meta"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/meta"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/labels"
 )
 
 const (
@@ -52,7 +52,7 @@ func IsNoSuchReaperError(err error) bool {
 	return ok
 }
 
-func ReaperFor(kind string, c client.Interface) (Reaper, error) {
+func ReaperFor(kind string, c client.Interface, ec *client.ExperimentalClient) (Reaper, error) {
 	switch kind {
 	case "ReplicationController":
 		return &ReplicationControllerReaper{c, Interval, Timeout}, nil

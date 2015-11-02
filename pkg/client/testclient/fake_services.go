@@ -17,10 +17,10 @@ limitations under the License.
 package testclient
 
 import (
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/watch"
 )
 
 // Fake implements ServiceInterface. Meant to be embedded into a struct to get a default
@@ -30,32 +30,48 @@ type FakeServices struct {
 	Namespace string
 }
 
-func (c *FakeServices) List(selector labels.Selector) (*api.ServiceList, error) {
-	obj, err := c.Fake.Invokes(FakeAction{Action: "list-services"}, &api.ServiceList{})
-	return obj.(*api.ServiceList), err
-}
-
 func (c *FakeServices) Get(name string) (*api.Service, error) {
-	obj, err := c.Fake.Invokes(FakeAction{Action: "get-service", Value: name}, &api.Service{})
+	obj, err := c.Fake.Invokes(NewGetAction("services", c.Namespace, name), &api.Service{})
+	if obj == nil {
+		return nil, err
+	}
+
 	return obj.(*api.Service), err
 }
 
+func (c *FakeServices) List(label labels.Selector) (*api.ServiceList, error) {
+	obj, err := c.Fake.Invokes(NewListAction("services", c.Namespace, label, nil), &api.ServiceList{})
+	if obj == nil {
+		return nil, err
+	}
+
+	return obj.(*api.ServiceList), err
+}
+
 func (c *FakeServices) Create(service *api.Service) (*api.Service, error) {
-	obj, err := c.Fake.Invokes(FakeAction{Action: "create-service", Value: service}, &api.Service{})
+	obj, err := c.Fake.Invokes(NewCreateAction("services", c.Namespace, service), service)
+	if obj == nil {
+		return nil, err
+	}
+
 	return obj.(*api.Service), err
 }
 
 func (c *FakeServices) Update(service *api.Service) (*api.Service, error) {
-	obj, err := c.Fake.Invokes(FakeAction{Action: "update-service", Value: service}, &api.Service{})
+	obj, err := c.Fake.Invokes(NewUpdateAction("services", c.Namespace, service), service)
+	if obj == nil {
+		return nil, err
+	}
+
 	return obj.(*api.Service), err
 }
 
 func (c *FakeServices) Delete(name string) error {
-	_, err := c.Fake.Invokes(FakeAction{Action: "delete-service", Value: name}, &api.Service{})
+	_, err := c.Fake.Invokes(NewDeleteAction("services", c.Namespace, name), &api.Service{})
 	return err
 }
 
 func (c *FakeServices) Watch(label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
-	c.Fake.Actions = append(c.Fake.Actions, FakeAction{Action: "watch-services", Value: resourceVersion})
-	return c.Fake.Watch, c.Fake.Err
+	c.Fake.Invokes(NewWatchAction("services", c.Namespace, label, field, resourceVersion), nil)
+	return c.Fake.Watch, nil
 }

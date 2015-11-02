@@ -20,16 +20,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/latest"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/validation"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/cache"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/record"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/controller/framework"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/latest"
+	"k8s.io/kubernetes/pkg/api/validation"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/client/cache"
+	"k8s.io/kubernetes/pkg/client/record"
+	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/runtime"
 	"sync/atomic"
 )
 
@@ -281,11 +281,11 @@ func (r RealPodControl) CreateReplica(namespace string, controller *api.Replicat
 		return fmt.Errorf("unable to create pod replica, no labels")
 	}
 	if newPod, err := r.KubeClient.Pods(namespace).Create(pod); err != nil {
-		r.Recorder.Eventf(controller, "failedCreate", "Error creating: %v", err)
+		r.Recorder.Eventf(controller, "FailedCreate", "Error creating: %v", err)
 		return fmt.Errorf("unable to create pod replica: %v", err)
 	} else {
 		glog.V(4).Infof("Controller %v created pod %v", controller.Name, newPod.Name)
-		r.Recorder.Eventf(controller, "successfulCreate", "Created pod: %v", newPod.Name)
+		r.Recorder.Eventf(controller, "SuccessfulCreate", "Created pod: %v", newPod.Name)
 	}
 	return nil
 }

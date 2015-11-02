@@ -23,13 +23,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/meta"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/validation"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/errors"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/meta"
+	"k8s.io/kubernetes/pkg/api/validation"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/errors"
 )
 
 // Builder provides convenience functions for taking arguments and parameters
@@ -583,6 +583,10 @@ func (b *Builder) visitorResult() *Result {
 			// must flatten lists prior to fetching
 			if b.flatten {
 				visitors = NewFlattenListVisitor(visitors, b.mapper)
+			}
+			// must set namespace prior to fetching
+			if b.defaultNamespace {
+				visitors = NewDecoratedVisitor(visitors, SetNamespace(b.namespace))
 			}
 			visitors = NewDecoratedVisitor(visitors, RetrieveLatest)
 		}

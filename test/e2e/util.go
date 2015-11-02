@@ -32,21 +32,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	apierrs "github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/resource"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/cache"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/clientcmd"
-	clientcmdapi "github.com/GoogleCloudPlatform/kubernetes/pkg/client/clientcmd/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/cloudprovider"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubectl"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/wait"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/watch"
+	"k8s.io/kubernetes/pkg/api"
+	apierrs "k8s.io/kubernetes/pkg/api/errors"
+	"k8s.io/kubernetes/pkg/api/resource"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/client/cache"
+	"k8s.io/kubernetes/pkg/client/clientcmd"
+	clientcmdapi "k8s.io/kubernetes/pkg/client/clientcmd/api"
+	"k8s.io/kubernetes/pkg/cloudprovider"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/kubectl"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/watch"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/prometheus/client_golang/extraction"
@@ -87,6 +87,9 @@ const (
 	// be "ready" before the test starts, so this is small.
 	podReadyBeforeTimeout = 20 * time.Second
 
+	podRespondingTimeout     = 2 * time.Minute
+	serviceRespondingTimeout = 2 * time.Minute
+
 	// How wide to print pod names, by default. Useful for aligning printing to
 	// quickly scan through output.
 	podPrintWidth = 55
@@ -121,6 +124,10 @@ type TestContextType struct {
 }
 
 var testContext TestContextType
+
+func SetTestContext(t TestContextType) {
+	testContext = t
+}
 
 type ContainerFailures struct {
 	status   *api.ContainerStateTerminated
@@ -171,7 +178,9 @@ type RCConfig struct {
 	Timeout       time.Duration
 	PodStatusFile *os.File
 	Replicas      int
+	CpuRequest    int64 // millicores
 	CpuLimit      int64 // millicores
+	MemRequest    int64 // bytes
 	MemLimit      int64 // bytes
 
 	// Env vars, set the same for every pod.
@@ -192,16 +201,20 @@ type RCConfig struct {
 	MaxContainerFailures *int
 }
 
+func nowStamp() string {
+	return time.Now().Format(time.StampMilli)
+}
+
 func Logf(format string, a ...interface{}) {
-	fmt.Fprintf(GinkgoWriter, "INFO: "+format+"\n", a...)
+	fmt.Fprintf(GinkgoWriter, nowStamp()+": INFO: "+format+"\n", a...)
 }
 
 func Failf(format string, a ...interface{}) {
-	Fail(fmt.Sprintf(format, a...), 1)
+	Fail(nowStamp()+": "+fmt.Sprintf(format, a...), 1)
 }
 
 func Skipf(format string, args ...interface{}) {
-	Skip(fmt.Sprintf(format, args...))
+	Skip(nowStamp() + ": " + fmt.Sprintf(format, args...))
 }
 
 func SkipUnlessNodeCountIsAtLeast(minNodeCount int) {
@@ -494,7 +507,7 @@ func deleteTestingNS(c *client.Client) error {
 		for _, ns := range namespaces.Items {
 			if strings.HasPrefix(ns.ObjectMeta.Name, "e2e-tests-") {
 				if ns.Status.Phase == api.NamespaceActive {
-					return fmt.Errorf("Namespace %s is active", ns)
+					return fmt.Errorf("Namespace %s is active", ns.ObjectMeta.Name)
 				}
 				terminating++
 			}
@@ -504,6 +517,51 @@ func deleteTestingNS(c *client.Client) error {
 		}
 	}
 	return fmt.Errorf("Waiting for terminating namespaces to be deleted timed out")
+}
+
+// deleteNS deletes the provided namespace, waits for it to be completely deleted, and then checks
+// whether there are any pods remaining in a non-terminating state.
+func deleteNS(c *client.Client, namespace string) error {
+	if err := c.Namespaces().Delete(namespace); err != nil {
+		return err
+	}
+
+	err := wait.Poll(1*time.Second, 2*time.Minute, func() (bool, error) {
+		if _, err := c.Namespaces().Get(namespace); err != nil {
+			if apierrs.IsNotFound(err) {
+				return true, nil
+			}
+			Logf("Error while waiting for namespace to be terminated: %v", err)
+			return false, nil
+		}
+		return false, nil
+	})
+
+	// check for pods that were not deleted
+	remaining := []string{}
+	missingTimestamp := false
+	if pods, perr := c.Pods(namespace).List(labels.Everything(), fields.Everything()); perr == nil {
+		for _, pod := range pods.Items {
+			Logf("Pod %s %s on node %s remains, has deletion timestamp %s", namespace, pod.Name, pod.Spec.NodeName, pod.DeletionTimestamp)
+			remaining = append(remaining, pod.Name)
+			if pod.DeletionTimestamp == nil {
+				missingTimestamp = true
+			}
+		}
+	}
+
+	// a timeout occured
+	if err != nil {
+		if missingTimestamp {
+			return fmt.Errorf("namespace %s was not deleted within limit: %v, some pods were not marked with a deletion timestamp, pods remaining: %v", namespace, err, remaining)
+		}
+		return fmt.Errorf("namespace %s was not deleted within limit: %v, pods remaining: %v", namespace, err, remaining)
+	}
+	// pods were not deleted but the namespace was deleted
+	if len(remaining) > 0 {
+		return fmt.Errorf("pods remained within namespace %s after deletion: %v", namespace, remaining)
+	}
+	return nil
 }
 
 func waitForPodRunningInNamespace(c *client.Client, podName string, namespace string) error {
@@ -542,18 +600,16 @@ func waitForPodSuccessInNamespace(c *client.Client, podName string, contName str
 				if ci.State.Terminated.ExitCode == 0 {
 					By("Saw pod success")
 					return true, nil
-				} else {
-					return true, fmt.Errorf("pod '%s' terminated with failure: %+v", podName, ci.State.Terminated)
 				}
-			} else {
-				Logf("Nil State.Terminated for container '%s' in pod '%s' in namespace '%s' so far", contName, podName, namespace)
+				return true, fmt.Errorf("pod '%s' terminated with failure: %+v", podName, ci.State.Terminated)
 			}
+			Logf("Nil State.Terminated for container '%s' in pod '%s' in namespace '%s' so far", contName, podName, namespace)
 		}
 		return false, nil
 	})
 }
 
-// waitForRCPodOnNode returns the pod from the given replication controller (decribed by rcName) which is scheduled on the given node.
+// waitForRCPodOnNode returns the pod from the given replication controller (described by rcName) which is scheduled on the given node.
 // In case of failure or too long waiting time, an error is returned.
 func waitForRCPodOnNode(c *client.Client, ns, rcName, node string) (*api.Pod, error) {
 	label := labels.SelectorFromSet(labels.Set(map[string]string{"name": rcName}))
@@ -576,7 +632,7 @@ func waitForRCPodOnNode(c *client.Client, ns, rcName, node string) (*api.Pod, er
 	return p, err
 }
 
-// waitForRCPodToDisappear returns nil if the pod from the given replication controller (decribed by rcName) no longer exists.
+// waitForRCPodToDisappear returns nil if the pod from the given replication controller (described by rcName) no longer exists.
 // In case of failure or too long waiting time, an error is returned.
 func waitForRCPodToDisappear(c *client.Client, ns, rcName, podName string) error {
 	label := labels.SelectorFromSet(labels.Set(map[string]string{"name": rcName}))
@@ -698,6 +754,37 @@ func (r podResponseChecker) checkAllResponses() (done bool, err error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+func podsResponding(c *client.Client, ns, name string, wantName bool, pods *api.PodList) error {
+	By("trying to dial each unique pod")
+	label := labels.SelectorFromSet(labels.Set(map[string]string{"name": name}))
+	return wait.Poll(poll, podRespondingTimeout, podResponseChecker{c, ns, label, name, wantName, pods}.checkAllResponses)
+}
+
+func serviceResponding(c *client.Client, ns, name string) error {
+	By(fmt.Sprintf("trying to dial the service %s.%s via the proxy", ns, name))
+
+	return wait.Poll(poll, serviceRespondingTimeout, func() (done bool, err error) {
+		body, err := c.Get().
+			Prefix("proxy").
+			Namespace(ns).
+			Resource("services").
+			Name(name).
+			Do().
+			Raw()
+		if err != nil {
+			Logf("Failed to GET from service %s: %v:", name, err)
+			return false, nil
+		}
+		got := string(body)
+		if len(got) == 0 {
+			Logf("Service %s: expected non-empty response", name)
+			return false, err // stop polling
+		}
+		Logf("Service %s: found nonempty answer: %s", name, got)
+		return true, nil
+	})
 }
 
 func loadConfig() (*client.Config, error) {
@@ -861,12 +948,29 @@ func kubectlCmd(args ...string) *exec.Cmd {
 	return cmd
 }
 
-func runKubectl(args ...string) string {
+// kubectlBuilder is used to build, custimize and execute a kubectl Command.
+// Add more functions to customize the builder as needed.
+type kubectlBuilder struct {
+	cmd *exec.Cmd
+}
+
+func newKubectlCommand(args ...string) *kubectlBuilder {
+	b := new(kubectlBuilder)
+	b.cmd = kubectlCmd(args...)
+	return b
+}
+
+func (b kubectlBuilder) withStdinData(data string) *kubectlBuilder {
+	b.cmd.Stdin = strings.NewReader(data)
+	return &b
+}
+
+func (b kubectlBuilder) exec() string {
 	var stdout, stderr bytes.Buffer
-	cmd := kubectlCmd(args...)
+	cmd := b.cmd
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 
-	Logf("Running '%s %s'", cmd.Path, strings.Join(cmd.Args, " "))
+	Logf("Running '%s %s'", cmd.Path, strings.Join(cmd.Args[1:], " ")) // skip arg[0] as it is printed separately
 	if err := cmd.Run(); err != nil {
 		Failf("Error running %v:\nCommand stdout:\n%v\nstderr:\n%v\n", cmd, cmd.Stdout, cmd.Stderr)
 		return ""
@@ -874,6 +978,11 @@ func runKubectl(args ...string) string {
 	Logf(stdout.String())
 	// TODO: trimspace should be unnecessary after switching to use kubectl binary directly
 	return strings.TrimSpace(stdout.String())
+}
+
+// runKubectl is a convenience wrapper over kubectlBuilder
+func runKubectl(args ...string) string {
+	return newKubectlCommand(args...).exec()
 }
 
 func startCmdAndStreamOutput(cmd *exec.Cmd) (stdout, stderr io.ReadCloser, err error) {
@@ -903,7 +1012,7 @@ func tryKill(cmd *exec.Cmd) {
 func testContainerOutputInNamespace(scenarioName string, c *client.Client, pod *api.Pod, containerIndex int, expectedOutput []string, ns string) {
 	By(fmt.Sprintf("Creating a pod to test %v", scenarioName))
 
-	defer c.Pods(ns).Delete(pod.Name, nil)
+	defer c.Pods(ns).Delete(pod.Name, api.NewDeleteOptions(0))
 	if _, err := c.Pods(ns).Create(pod); err != nil {
 		Failf("Failed to create pod: %v", err)
 	}
@@ -951,7 +1060,7 @@ func testContainerOutputInNamespace(scenarioName string, c *client.Client, pod *
 			continue
 
 		}
-		By(fmt.Sprintf("Succesfully fetched pod logs:%v\n", string(logs)))
+		By(fmt.Sprintf("Successfully fetched pod logs:%v\n", string(logs)))
 		break
 	}
 
@@ -1094,6 +1203,15 @@ func RunRC(config RCConfig) error {
 	if config.MemLimit > 0 {
 		rc.Spec.Template.Spec.Containers[0].Resources.Limits[api.ResourceMemory] = *resource.NewQuantity(config.MemLimit, resource.DecimalSI)
 	}
+	if config.CpuRequest > 0 || config.MemRequest > 0 {
+		rc.Spec.Template.Spec.Containers[0].Resources.Requests = api.ResourceList{}
+	}
+	if config.CpuRequest > 0 {
+		rc.Spec.Template.Spec.Containers[0].Resources.Requests[api.ResourceCPU] = *resource.NewMilliQuantity(config.CpuRequest, resource.DecimalSI)
+	}
+	if config.MemRequest > 0 {
+		rc.Spec.Template.Spec.Containers[0].Resources.Requests[api.ResourceMemory] = *resource.NewQuantity(config.MemRequest, resource.DecimalSI)
+	}
 
 	_, err := config.Client.ReplicationControllers(config.Namespace).Create(rc)
 	if err != nil {
@@ -1187,6 +1305,13 @@ func RunRC(config RCConfig) error {
 	}
 
 	if oldRunning != config.Replicas {
+		if pods, err := config.Client.Pods(api.NamespaceAll).List(labels.Everything(), fields.Everything()); err == nil {
+			for _, pod := range pods.Items {
+				Logf("Pod %s\t%s\t%s\t%s", pod.Namespace, pod.Name, pod.Spec.NodeName, pod.DeletionTimestamp)
+			}
+		} else {
+			Logf("Can't list pod debug info: %v", err)
+		}
 		return fmt.Errorf("Only %d pods started out of %d", oldRunning, config.Replicas)
 	}
 	return nil
@@ -1251,7 +1376,7 @@ func getNodeEvents(c *client.Client, nodeName string) []api.Event {
 	return events.Items
 }
 
-func ScaleRC(c *client.Client, ns, name string, size uint) error {
+func ScaleRC(c *client.Client, ns, name string, size uint, wait bool) error {
 	By(fmt.Sprintf("%v Scaling replication controller %s in namespace %s to %d", time.Now(), name, ns, size))
 	scaler, err := kubectl.ScalerFor("ReplicationController", kubectl.NewScalerClient(c))
 	if err != nil {
@@ -1261,6 +1386,9 @@ func ScaleRC(c *client.Client, ns, name string, size uint) error {
 	waitForReplicas := kubectl.NewRetryParams(5*time.Second, 5*time.Minute)
 	if err = scaler.Scale(ns, name, size, nil, waitForScale, waitForReplicas); err != nil {
 		return err
+	}
+	if !wait {
+		return nil
 	}
 	return waitForRCPodsRunning(c, ns, name)
 }
@@ -1424,15 +1552,39 @@ func NodeSSHHosts(c *client.Client) ([]string, error) {
 // is no error performing the SSH, the stdout, stderr, and exit code are
 // returned.
 func SSH(cmd, host, provider string) (string, string, int, error) {
+	return sshCore(cmd, host, provider, false)
+}
+
+// SSHVerbose is just like SSH, but it logs the command, user, host, stdout,
+// stderr, exit code, and error.
+func SSHVerbose(cmd, host, provider string) (string, string, int, error) {
+	return sshCore(cmd, host, provider, true)
+}
+
+func sshCore(cmd, host, provider string, verbose bool) (string, string, int, error) {
 	// Get a signer for the provider.
 	signer, err := getSigner(provider)
 	if err != nil {
 		return "", "", 0, fmt.Errorf("error getting signer for provider %s: '%v'", provider, err)
 	}
 
+	// RunSSHCommand will default to Getenv("USER") if user == "", but we're
+	// defaulting here as well for logging clarity.
 	user := os.Getenv("KUBE_SSH_USER")
-	// RunSSHCommand will default to Getenv("USER") if user == ""
-	return util.RunSSHCommand(cmd, user, host, signer)
+	if user == "" {
+		user = os.Getenv("USER")
+	}
+
+	stdout, stderr, code, err := util.RunSSHCommand(cmd, user, host, signer)
+	if verbose {
+		remote := fmt.Sprintf("%s@%s", user, host)
+		Logf("[%s] Running    `%s`", remote, cmd)
+		Logf("[%s] stdout:    %q", remote, stdout)
+		Logf("[%s] stderr:    %q", remote, stderr)
+		Logf("[%s] exit code: %d", remote, code)
+		Logf("[%s] error:     %v", remote, err)
+	}
+	return stdout, stderr, code, err
 }
 
 // getSigner returns an ssh.Signer for the provider ("gce", etc.) that can be
@@ -1501,7 +1653,7 @@ func waitForNodeToBeNotReady(c *client.Client, name string, timeout time.Duratio
 func isNodeReadySetAsExpected(node *api.Node, wantReady bool) bool {
 	// Check the node readiness condition (logging all).
 	for i, cond := range node.Status.Conditions {
-		Logf("Node %s condition %d/%d: type: %v, status: %v, reason: %q, message: %q, last transistion time: %v",
+		Logf("Node %s condition %d/%d: type: %v, status: %v, reason: %q, message: %q, last transition time: %v",
 			node.Name, i+1, len(node.Status.Conditions), cond.Type, cond.Status,
 			cond.Reason, cond.Message, cond.LastTransitionTime)
 		// Ensure that the condition type is readiness and the status
@@ -1679,7 +1831,7 @@ func resetMetrics(c *client.Client) error {
 		return err
 	}
 	if string(body) != "metrics reset\n" {
-		return fmt.Errorf("Unexpected response: ", string(body))
+		return fmt.Errorf("Unexpected response: %q", string(body))
 	}
 	return nil
 }

@@ -17,10 +17,11 @@ limitations under the License.
 package cache
 
 import (
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 	"reflect"
 	"testing"
 	"time"
+
+	"k8s.io/kubernetes/pkg/util"
 )
 
 func TestTTLExpirationBasic(t *testing.T) {
@@ -111,14 +112,14 @@ func TestTTLPolicy(t *testing.T) {
 	exactlyOnTTL := fakeTime.Add(-ttl)
 	expiredTime := fakeTime.Add(-(ttl + 1))
 
-	policy := TTLPolicy{ttl, &util.FakeClock{fakeTime}}
+	policy := TTLPolicy{ttl, &util.FakeClock{Time: fakeTime}}
 	fakeTimestampedEntry := &timestampedEntry{obj: struct{}{}, timestamp: exactlyOnTTL}
 	if policy.IsExpired(fakeTimestampedEntry) {
 		t.Errorf("TTL cache should not expire entries exactly on ttl")
 	}
 	fakeTimestampedEntry.timestamp = fakeTime
 	if policy.IsExpired(fakeTimestampedEntry) {
-		t.Errorf("TTL Cache should not expire entires before ttl")
+		t.Errorf("TTL Cache should not expire entries before ttl")
 	}
 	fakeTimestampedEntry.timestamp = expiredTime
 	if !policy.IsExpired(fakeTimestampedEntry) {

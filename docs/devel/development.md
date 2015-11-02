@@ -51,7 +51,7 @@ Below, we outline one of the more common git workflows that core developers use.
 
 ### Fork the main repository
 
-1. Go to https://github.com/GoogleCloudPlatform/kubernetes
+1. Go to https://github.com/kubernetes/kubernetes
 2. Click the "Fork" button (at the top right)
 
 ### Clone your fork
@@ -59,12 +59,12 @@ Below, we outline one of the more common git workflows that core developers use.
 The commands below require that you have $GOPATH set ([$GOPATH docs](https://golang.org/doc/code.html#GOPATH)). We highly recommend you put Kubernetes' code into your GOPATH. Note: the commands below will not work if there is more than one directory in your `$GOPATH`.
 
 ```sh
-mkdir -p $GOPATH/src/github.com/GoogleCloudPlatform/
-cd $GOPATH/src/github.com/GoogleCloudPlatform/
+mkdir -p $GOPATH/src/k8s.io
+cd $GOPATH/src/k8s.io
 # Replace "$YOUR_GITHUB_USERNAME" below with your github username
 git clone https://github.com/$YOUR_GITHUB_USERNAME/kubernetes.git
 cd kubernetes
-git remote add upstream 'https://github.com/GoogleCloudPlatform/kubernetes.git'
+git remote add upstream 'https://github.com/kubernetes/kubernetes.git'
 ```
 
 ### Create a branch and make changes
@@ -81,13 +81,13 @@ git fetch upstream
 git rebase upstream/master
 ```
 
-Note: If you have write access to the main repository at github.com/GoogleCloudPlatform/kubernetes, you should modify your git configuration so that you can't accidentally push to upstream:
+Note: If you have write access to the main repository at github.com/kubernetes/kubernetes, you should modify your git configuration so that you can't accidentally push to upstream:
 
 ```sh
 git remote set-url --push upstream no_push
 ```
 
-### Commiting changes to your fork
+### Committing changes to your fork
 
 ```sh
 git commit
@@ -98,7 +98,19 @@ git push -f origin myfeature
 
 1. Visit http://github.com/$YOUR_GITHUB_USERNAME/kubernetes
 2. Click the "Compare and pull request" button next to your "myfeature" branch.
+3. Check out the pull request [process](pull-requests.md) for more details
 
+### When to retain commits and when to squash
+
+Upon merge, all git commits should represent meaningful milestones or units of
+work.  Use commits to add clarity to the development and review process.
+
+Before merging a PR, squash any "fix review feedback", "typo", and "rebased"
+sorts of commits.  It is not imperative that every commit in a PR compile and
+pass tests independently, but it is worth striving for.  For mass automated
+fixups (e.g. automated doc formatting), use one or more commits for the
+changes to tooling and a final commit to apply the fixup en masse.  This makes
+reviews much easier.
 
 ## godep and dependency management
 
@@ -135,8 +147,8 @@ Here's a quick walkthrough of one way to use godeps to add or update a Kubernete
 
 ```sh
 export KPATH=$HOME/code/kubernetes
-mkdir -p $KPATH/src/github.com/GoogleCloudPlatform/kubernetes
-cd $KPATH/src/github.com/GoogleCloudPlatform/kubernetes
+mkdir -p $KPATH/src/k8s.io/kubernetes
+cd $KPATH/src/k8s.io/kubernetes
 git clone https://path/to/your/fork .
 # Or copy your existing local repo here. IMPORTANT: making a symlink doesn't work.
 ```
@@ -154,7 +166,7 @@ export GOPATH=$KPATH
 3) Populate your new GOPATH.
 
 ```sh
-cd $KPATH/src/github.com/GoogleCloudPlatform/kubernetes
+cd $KPATH/src/github.com/kubernetes/kubernetes
 godep restore
 ```
 
@@ -162,13 +174,13 @@ godep restore
 
 ```sh
 # To add a new dependency, do:
-cd $KPATH/src/github.com/GoogleCloudPlatform/kubernetes
+cd $KPATH/src/k8s.io/kubernetes
 go get path/to/dependency
 # Change code in Kubernetes to use the dependency.
 godep save ./...
 
 # To update an existing dependency, do:
-cd $KPATH/src/github.com/GoogleCloudPlatform/kubernetes
+cd $KPATH/src/k8s.io/kubernetes
 go get -u path/to/dependency
 # Change code in Kubernetes accordingly if necessary.
 godep update path/to/dependency
@@ -212,7 +224,7 @@ $ cd pkg/kubelet
 $ godep go test
 # some output from unit tests
 PASS
-ok      github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet   0.317s
+ok      k8s.io/kubernetes/pkg/kubelet   0.317s
 ```
 
 ## Coverage
@@ -237,7 +249,7 @@ KUBE_COVER=y hack/test-go.sh pkg/kubectl
 
 Multiple arguments can be passed, in which case the coverage results will be combined for all tests run.
 
-Coverage results for the project can also be viewed on [Coveralls](https://coveralls.io/r/GoogleCloudPlatform/kubernetes), and are continuously updated as commits are merged. Additionally, all pull requests which spawn a Travis build will report unit test coverage results to Coveralls.
+Coverage results for the project can also be viewed on [Coveralls](https://coveralls.io/r/kubernetes/kubernetes), and are continuously updated as commits are merged. Additionally, all pull requests which spawn a Travis build will report unit test coverage results to Coveralls. Coverage reports from before the Kubernetes Github organization was created can be found [here](https://coveralls.io/r/GoogleCloudPlatform/kubernetes).
 
 ## Integration tests
 
@@ -333,7 +345,7 @@ See [conformance-test.sh](http://releases.k8s.io/HEAD/hack/conformance-test.sh).
 ## Regenerating the CLI documentation
 
 ```sh
-hack/run-gendocs.sh
+hack/update-generated-docs.sh
 ```
 
 

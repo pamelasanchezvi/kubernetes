@@ -5,7 +5,7 @@
 The implementation of the scheduler HA feature includes:
 
 - Checkpointing by default (`--checkpoint`)
-- Large failover-timeout by default (`--failover_timeout`)
+- Large failover-timeout by default (`--failover-timeout`)
 - Hot-failover w/ multiple scheduler instances (`--ha`)
 - Best effort task reconciliation on failover
 
@@ -34,7 +34,7 @@ In this case, if there are problems launching a replacement scheduler process th
 ##### Command Line Arguments
 
 - `--ha` is required to enable scheduler HA and multi-scheduler leader election.
-- `--km_path` or else (`--executor_path` and `--proxy_path`) should reference non-local-file URI's and must be identicial across schedulers.
+- `--km_path` or else (`--executor_path` and `--proxy_path`) should reference non-local-file URI's and must be identical across schedulers.
 
 If you have HDFS installed on your slaves then you can specify HDFS URI locations for the binaries:
 
@@ -52,8 +52,8 @@ Within the scheduler, compatibility is largely determined by comparing executor 
   a hash is calculated from a subset of the executor-related command line parameters provided to the scheduler process.
 The command line parameters that affect the hash calculation are listed below.
 
-- `--allow_privileged`
-- `--api_servers`
+- `--allow-privileged`
+- `--api-servers`
 - `--auth_path`
 - `--cluster_*`
 - `--executor_*`

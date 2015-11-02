@@ -49,7 +49,7 @@ This document describes how to deploy Kubernetes on ubuntu nodes, including 1 Ku
 
 ## Prerequisites
 
-*1 The nodes have installed docker version 1.2+ and bridge-utils to manipulate linux bridge* 
+*1 The nodes have installed docker version 1.2+ and bridge-utils to manipulate linux bridge*
 
 *2 All machines can communicate with each other, no need to connect Internet (should use private docker registry in this case)*
 
@@ -57,7 +57,7 @@ This document describes how to deploy Kubernetes on ubuntu nodes, including 1 Ku
 
 *4 Dependencies of this guide: etcd-2.0.12, flannel-0.4.0, k8s-1.0.1, but it may work with higher versions*
 
-*5 All the remote servers can be ssh logged in without a password by using key authentication* 
+*5 All the remote servers can be ssh logged in without a password by using key authentication*
 
 
 ### Starting a Cluster
@@ -80,7 +80,7 @@ Please make sure that there are `kube-apiserver`, `kube-controller-manager`, `ku
 
 An example cluster is listed as below:
 
-| IP Address|Role |      
+| IP Address|Role |
 |---------|------|
 |10.10.103.223|   node   |
 |10.10.103.162|   node   |
@@ -102,7 +102,7 @@ export FLANNEL_NET=172.16.0.0/16
 
 The first variable `nodes` defines all your cluster nodes, MASTER node comes first and separated with blank space like `<user_1@ip_1> <user_2@ip_2> <user_3@ip_3> `
 
-Then the `roles ` variable defines the role of above machine in the same order, "ai" stands for machine acts as both master and node, "a" stands for master, "i" stands for node. So they are just defined the k8s cluster as the table above described.
+Then the `role` variable defines the role of above machine in the same order, "ai" stands for machine acts as both master and node, "a" stands for master, "i" stands for node. So they are just defined the k8s cluster as the table above described.
 
 The `NUM_MINIONS` variable defines the total number of nodes.
 
@@ -112,13 +112,13 @@ The `SERVICE_CLUSTER_IP_RANGE` variable defines the Kubernetes service IP range.
 
      172.16.0.0      -   172.31.255.255  (172.16/12 prefix)
 
-     192.168.0.0     -   192.168.255.255 (192.168/16 prefix) 
+     192.168.0.0     -   192.168.255.255 (192.168/16 prefix)
 
 The `FLANNEL_NET` variable defines the IP range used for flannel overlay network, should not conflict with above `SERVICE_CLUSTER_IP_RANGE`.
 
 After all the above variables being set correctly, we can use following command in cluster/ directory to bring up the whole cluster.
 
-`$ KUBERNETES_PROVIDER=ubuntu ./kube-up.sh` 
+`$ KUBERNETES_PROVIDER=ubuntu ./kube-up.sh`
 
 The scripts automatically scp binaries and config files to all the machines and start the k8s service on them. The only thing you need to do is to type the sudo password when promoted. The current machine name is shown below, so you will not type in the wrong password.
 
@@ -135,9 +135,9 @@ If all things goes right, you will see the below message from console
 
 **All done !**
 
-You can also use `kubectl` command to see if the newly created k8s is working correctly. The `kubectl` binary is under the `cluster/ubuntu/binaries` directory. You can move it into your PATH. Then you can use the below command smoothly. 
+You can also use `kubectl` command to see if the newly created k8s is working correctly. The `kubectl` binary is under the `cluster/ubuntu/binaries` directory. You can move it into your PATH. Then you can use the below command smoothly.
 
-For example, use `$ kubectl get nodes` to see if all your nodes are in ready status. It may take some time for the nodes ready to use like below. 
+For example, use `$ kubectl get nodes` to see if all your nodes are in ready status. It may take some time for the nodes ready to use like below.
 
 ```console
 NAME            LABELS                                 STATUS
@@ -154,9 +154,9 @@ Also you can run Kubernetes [guest-example](../../examples/guestbook/) to build 
 
 #### Deploy addons
 
-After the previous parts, you will have a working k8s cluster, this part will teach you how to deploy addons like dns onto the existing cluster.
+After the previous parts, you will have a working k8s cluster, this part will teach you how to deploy addons like DNS and UI onto the existing cluster.
 
-The configuration of dns is configured in cluster/ubuntu/config-default.sh.
+The configuration of DNS is configured in cluster/ubuntu/config-default.sh.
 
 ```sh
 ENABLE_CLUSTER_DNS="${KUBE_ENABLE_CLUSTER_DNS:-true}"
@@ -168,11 +168,17 @@ DNS_DOMAIN="cluster.local"
 DNS_REPLICAS=1
 ```
 
-The `DNS_SERVER_IP` is defining the ip of dns server which must be in the service_cluster_ip_range.
+The `DNS_SERVER_IP` is defining the ip of dns server which must be in the `SERVICE_CLUSTER_IP_RANGE`.
 
 The `DNS_REPLICAS` describes how many dns pod running in the cluster.
 
-After all the above variable have been set. Just type the below command
+Further, if you want to deploy UI addon, you should also modify the configuration file as follows:
+
+```sh
+ENABLE_CLUSTER_UI="${KUBE_ENABLE_CLUSTER_UI:-true}"
+```
+
+After all the above variable have been set, just type the below command.
 
 ```console
 $ cd cluster/ubuntu
@@ -180,7 +186,7 @@ $ cd cluster/ubuntu
 $ KUBERNETES_PROVIDER=ubuntu ./deployAddons.sh
 ```
 
-After some time, you can use `$ kubectl get pods` to see the dns pod is running in the cluster. Done!
+After some time, you can use `$ kubectl get pods --namespace=kube-system` to see the DNS and UI pods are running in the cluster. Done!
 
 #### On going
 
@@ -192,19 +198,19 @@ We are working on these features which we'd like to let everybody know:
 
 #### Trouble Shooting
 
-Generally, what this approach did is quite simple: 
+Generally, what this approach did is quite simple:
 
 1. Download and copy binaries and configuration files to proper directories on every node
 
-2. Configure `etcd` using IPs based on input from user 
+2. Configure `etcd` using IPs based on input from user
 
 3. Create and start flannel network
 
-So, if you see a problem, **check etcd configuration first** 
+So, if you see a problem, **check etcd configuration first**
 
 Please try:
 
-1. Check `/var/log/upstart/etcd.log` for suspicious etcd log 
+1. Check `/var/log/upstart/etcd.log` for suspicious etcd log
 
 2. Check `/etc/default/etcd`, as we do not have much input validation, a right config should be like:
 
@@ -212,11 +218,11 @@ Please try:
 	ETCD_OPTS="-name infra1 -initial-advertise-peer-urls <http://ip_of_this_node:2380> -listen-peer-urls <http://ip_of_this_node:2380> -initial-cluster-token etcd-cluster-1 -initial-cluster infra1=<http://ip_of_this_node:2380>,infra2=<http://ip_of_another_node:2380>,infra3=<http://ip_of_another_node:2380> -initial-cluster-state new"
 	```
 
-3. You can use below command 
+3. You can use below command
    `$ KUBERNETES_PROVIDER=ubuntu ./kube-down.sh` to bring down the cluster and run
    `$ KUBERNETES_PROVIDER=ubuntu ./kube-up.sh` again to start again.
-    
-4. You can also customize your own settings in `/etc/default/{component_name}` after configured success. 
+
+4. You can also customize your own settings in `/etc/default/{component_name}` after configured success.
 
 
 <!-- BEGIN MUNGE: GENERATED_ANALYTICS -->

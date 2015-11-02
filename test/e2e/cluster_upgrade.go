@@ -29,12 +29,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/labels"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/util/wait"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -526,13 +526,12 @@ func migTemplate() (string, error) {
 	if wait.Poll(poll, singleCallTimeout, func() (bool, error) {
 		// TODO(mbforbes): make this hit the compute API directly instead of
 		// shelling out to gcloud.
-		o, err := exec.Command("gcloud", "preview", "managed-instance-groups",
+		o, err := exec.Command("gcloud", "compute", "instance-groups", "managed",
+			"describe", testContext.CloudConfig.NodeInstanceGroup,
 			fmt.Sprintf("--project=%s", testContext.CloudConfig.ProjectID),
-			fmt.Sprintf("--zone=%s", testContext.CloudConfig.Zone),
-			"describe",
-			testContext.CloudConfig.NodeInstanceGroup).CombinedOutput()
+			fmt.Sprintf("--zone=%s", testContext.CloudConfig.Zone)).CombinedOutput()
 		if err != nil {
-			errLast = fmt.Errorf("gcloud preview managed-instance-groups describe call failed with err: %v", err)
+			errLast = fmt.Errorf("gcloud compute instance-groups managed describe call failed with err: %v", err)
 			return false, nil
 		}
 		output := string(o)

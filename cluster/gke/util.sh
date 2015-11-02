@@ -144,12 +144,8 @@ function kube-up() {
     "--num-nodes=${NUM_MINIONS}"
     "--network=${NETWORK}"
     "--scopes=${MINION_SCOPES}"
+    "--cluster-version=${CLUSTER_API_VERSION}"
   )
-  if [[ ! -z "${DOGFOOD_GCLOUD:-}" ]]; then
-    create_args+=("--cluster-version=${CLUSTER_API_VERSION:-}")
-  else
-    create_args+=("--cluster-api-version=${CLUSTER_API_VERSION:-}")
-  fi
 
   # Bring up the cluster.
   "${GCLOUD}" "${CMD_GROUP}" container clusters create "${CLUSTER_NAME}" "${create_args[@]}"
@@ -210,18 +206,17 @@ function get-password() {
     | grep password | cut -f 4 -d ' ')
 }
 
-# Detect the instance name and IP for the master
+# Detect the IP for the master. Note that on GKE, we don't know the name of the
+# master, so KUBE_MASTER is not set.
 #
 # Assumed vars:
 #   ZONE
 #   CLUSTER_NAME
 # Vars set:
-#   KUBE_MASTER
 #   KUBE_MASTER_IP
 function detect-master() {
   echo "... in gke:detect-master()" >&2
   detect-project >&2
-  KUBE_MASTER="k8s-${CLUSTER_NAME}-master"
   KUBE_MASTER_IP=$("${GCLOUD}" "${CMD_GROUP}" container clusters describe \
     --project="${PROJECT}" --zone="${ZONE}" "${CLUSTER_NAME}" \
     | grep endpoint | cut -f 2 -d ' ')

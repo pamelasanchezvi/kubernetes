@@ -23,26 +23,19 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/cache"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/controller/framework"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/fields"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/plugin/pkg/scheduler"
-	"github.com/GoogleCloudPlatform/kubernetes/plugin/pkg/scheduler/algorithm"
-	schedulerapi "github.com/GoogleCloudPlatform/kubernetes/plugin/pkg/scheduler/api"
-	"github.com/GoogleCloudPlatform/kubernetes/plugin/pkg/scheduler/api/validation"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/errors"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/client/cache"
+	"k8s.io/kubernetes/pkg/controller/framework"
+	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/plugin/pkg/scheduler"
+	"k8s.io/kubernetes/plugin/pkg/scheduler/algorithm"
+	schedulerapi "k8s.io/kubernetes/plugin/pkg/scheduler/api"
+	"k8s.io/kubernetes/plugin/pkg/scheduler/api/validation"
 
 	"github.com/golang/glog"
-)
-
-// Rate limitations for binding pods to hosts.
-// TODO: expose these as cmd line flags.
-const (
-	BindPodsQps   = 15
-	BindPodsBurst = 20
 )
 
 // ConfigFactory knows how to fill out a scheduler config with its support functions.
@@ -50,6 +43,8 @@ type ConfigFactory struct {
 	Client *client.Client
 	// queue for pods that need scheduling
 	PodQueue *cache.FIFO
+	// queue for nodes
+	NodeQueue *cache.HashedFIFO
 	// a means to list all known scheduled pods.
 	ScheduledPodLister *cache.StoreToPodLister
 	// a means to list all known scheduled pods and pods assumed to have been scheduled.
@@ -58,6 +53,8 @@ type ConfigFactory struct {
 	NodeLister *cache.StoreToNodeLister
 	// a means to list all services
 	ServiceLister *cache.StoreToServiceLister
+	// a means to list all controllers
+	ControllerLister *cache.StoreToReplicationControllerLister
 
 	// Close this to stop all reflectors
 	StopEverything chan struct{}
@@ -69,20 +66,22 @@ type ConfigFactory struct {
 }
 
 // Initializes the factory.
-func NewConfigFactory(client *client.Client) *ConfigFactory {
+func NewConfigFactory(client *client.Client, rateLimiter util.RateLimiter) *ConfigFactory {
 	c := &ConfigFactory{
 		Client:             client,
 		PodQueue:           cache.NewFIFO(cache.MetaNamespaceKeyFunc),
+		NodeQueue:          cache.NewHashedFIFO(cache.MetaNamespaceKeyFunc),
 		ScheduledPodLister: &cache.StoreToPodLister{},
 		// Only nodes in the "Ready" condition with status == "True" are schedulable
-		NodeLister:     &cache.StoreToNodeLister{cache.NewStore(cache.MetaNamespaceKeyFunc)},
-		ServiceLister:  &cache.StoreToServiceLister{cache.NewStore(cache.MetaNamespaceKeyFunc)},
-		StopEverything: make(chan struct{}),
+		NodeLister:       &cache.StoreToNodeLister{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
+		ServiceLister:    &cache.StoreToServiceLister{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
+		ControllerLister: &cache.StoreToReplicationControllerLister{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
+		StopEverything:   make(chan struct{}),
 	}
-	modeler := scheduler.NewSimpleModeler(&cache.StoreToPodLister{c.PodQueue}, c.ScheduledPodLister)
+	modeler := scheduler.NewSimpleModeler(&cache.StoreToPodLister{Store: c.PodQueue}, c.ScheduledPodLister)
 	c.modeler = modeler
 	c.PodLister = modeler.PodLister()
-	c.BindPodsRateLimiter = util.NewTokenBucketRateLimiter(BindPodsQps, BindPodsBurst)
+	c.BindPodsRateLimiter = rateLimiter
 
 	// On add/delete to the scheduled pods, remove from the assumed pods.
 	// We construct this here instead of in CreateFromKeys because
@@ -160,8 +159,9 @@ func (f *ConfigFactory) CreateFromConfig(policy schedulerapi.Policy) (*scheduler
 func (f *ConfigFactory) CreateFromKeys(predicateKeys, priorityKeys util.StringSet) (*scheduler.Config, error) {
 	glog.V(2).Infof("creating scheduler with fit predicates '%v' and priority functions '%v", predicateKeys, priorityKeys)
 	pluginArgs := PluginFactoryArgs{
-		PodLister:     f.PodLister,
-		ServiceLister: f.ServiceLister,
+		PodLister:        f.PodLister,
+		ServiceLister:    f.ServiceLister,
+		ControllerLister: f.ControllerLister,
 		// All fit predicates only need to consider schedulable nodes.
 		NodeLister: f.NodeLister.NodeCondition(api.NodeReady, api.ConditionTrue),
 		NodeInfo:   f.NodeLister,
@@ -179,6 +179,9 @@ func (f *ConfigFactory) CreateFromKeys(predicateKeys, priorityKeys util.StringSe
 	// Watch and queue pods that need scheduling.
 	cache.NewReflector(f.createUnassignedPodLW(), &api.Pod{}, f.PodQueue, 0).RunUntil(f.StopEverything)
 
+	// Watch and queue node
+	cache.NewReflector(f.createMinionLW(), &api.Node{}, f.NodeQueue, 0).RunUntil(f.StopEverything)
+
 	// Begin populating scheduled pods.
 	go f.scheduledPodPopulator.Run(f.StopEverything)
 
@@ -187,9 +190,14 @@ func (f *ConfigFactory) CreateFromKeys(predicateKeys, priorityKeys util.StringSe
 	cache.NewReflector(f.createMinionLW(), &api.Node{}, f.NodeLister.Store, 0).RunUntil(f.StopEverything)
 
 	// Watch and cache all service objects. Scheduler needs to find all pods
-	// created by the same service, so that it can spread them correctly.
+	// created by the same services or ReplicationControllers, so that it can spread them correctly.
 	// Cache this locally.
 	cache.NewReflector(f.createServiceLW(), &api.Service{}, f.ServiceLister.Store, 0).RunUntil(f.StopEverything)
+
+	// Watch and cache all ReplicationController objects. Scheduler needs to find all pods
+	// created by the same services or ReplicationControllers, so that it can spread them correctly.
+	// Cache this locally.
+	cache.NewReflector(f.createControllerLW(), &api.ReplicationController{}, f.ControllerLister.Store, 0).RunUntil(f.StopEverything)
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -207,12 +215,18 @@ func (f *ConfigFactory) CreateFromKeys(predicateKeys, priorityKeys util.StringSe
 		Modeler: f.modeler,
 		// The scheduler only needs to consider schedulable nodes.
 		MinionLister: f.NodeLister.NodeCondition(api.NodeReady, api.ConditionTrue),
+		PodLister:    f.ScheduledPodLister,
 		Algorithm:    algo,
 		Binder:       &binder{f.Client},
 		NextPod: func() *api.Pod {
 			pod := f.PodQueue.Pop().(*api.Pod)
 			glog.V(2).Infof("About to try and schedule pod %v", pod.Name)
 			return pod
+		},
+		NextNode: func() *api.Node {
+			node := f.NodeQueue.Pop().(*api.Node)
+			glog.V(2).Infof("Get a new Node %v", node.Name)
+			return node
 		},
 		Error:               f.makeDefaultErrorFunc(&podBackoff, f.PodQueue),
 		BindPodsRateLimiter: f.BindPodsRateLimiter,
@@ -249,9 +263,21 @@ func (factory *ConfigFactory) createMinionLW() *cache.ListWatch {
 	return cache.NewListWatchFromClient(factory.Client, "nodes", api.NamespaceAll, fields)
 }
 
+// createReadyMinionLW returns a cache.ListWatch that gets all changes to minions.
+func (factory *ConfigFactory) createReadyMinionLW() *cache.ListWatch {
+	// TODO: Filter out nodes that doesn't have NodeReady condition. We may want to have not ready node
+	fields := fields.Set{client.NodeCondition: "Ready"}.AsSelector()
+	return cache.NewListWatchFromClient(factory.Client, "nodes", api.NamespaceAll, fields)
+}
+
 // Returns a cache.ListWatch that gets all changes to services.
 func (factory *ConfigFactory) createServiceLW() *cache.ListWatch {
 	return cache.NewListWatchFromClient(factory.Client, "services", api.NamespaceAll, parseSelectorOrDie(""))
+}
+
+// Returns a cache.ListWatch that gets all changes to controllers.
+func (factory *ConfigFactory) createControllerLW() *cache.ListWatch {
+	return cache.NewListWatchFromClient(factory.Client, "replicationControllers", api.NamespaceAll, parseSelectorOrDie(""))
 }
 
 func (factory *ConfigFactory) makeDefaultErrorFunc(backoff *podBackoff, podQueue *cache.FIFO) func(pod *api.Pod, err error) {

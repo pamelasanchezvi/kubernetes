@@ -51,6 +51,7 @@ The following information is available to a `Pod` through the downward API:
 
 *   The pod's name
 *   The pod's namespace
+*   The pod's IP
 
 More information will be exposed through this same API over time.
 
@@ -101,11 +102,15 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: MY_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
   restartPolicy: Never
 ```
 
 [Download example](downward-api/dapi-pod.yaml)
-<!-- END MUNGE: EXAMPLE -->
+<!-- END MUNGE: EXAMPLE downward-api/dapi-pod.yaml -->
 
 Some more thorough examples:
    * [environment variables](environment-guide/)

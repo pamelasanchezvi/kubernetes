@@ -18,9 +18,11 @@ package cache
 
 import (
 	"fmt"
+	// "reflect"
+	// "runtime/debug"
 	"strings"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/meta"
+	"k8s.io/kubernetes/pkg/api/meta"
 )
 
 // Store is a generic object storage interface. Reflector knows how to watch a server
@@ -167,6 +169,10 @@ func (c *cache) Index(indexName string, obj interface{}) ([]interface{}, error) 
 // ListIndexFuncValues returns the list of generated values of an Index func
 func (c *cache) ListIndexFuncValues(indexName string) []string {
 	return c.cacheStorage.ListIndexFuncValues(indexName)
+}
+
+func (c *cache) ByIndex(indexName, indexKey string) ([]interface{}, error) {
+	return c.cacheStorage.ByIndex(indexName, indexKey)
 }
 
 // Get returns the requested item, or sets exists=false.

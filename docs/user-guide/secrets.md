@@ -36,7 +36,7 @@ Documentation for other releases can be found at
 Objects of type `secret` are intended to hold sensitive information, such as
 passwords, OAuth tokens, and ssh keys.  Putting this information in a `secret`
 is safer and more flexible than putting it verbatim in a `pod` definition or in
-a docker image. See [Secrets design document](../design/secrets.md) for more information. 
+a docker image. See [Secrets design document](../design/secrets.md) for more information.
 
 **Table of Contents**
 <!-- BEGIN MUNGE: GENERATED_TOC -->
@@ -160,12 +160,12 @@ See another example of creating a secret and a pod that consumes that secret in 
 
 ### Manually specifying an imagePullSecret
 
-Use of imagePullSecrets is desribed in the [images documentation](images.md#specifying-imagepullsecrets-on-a-pod)
+Use of imagePullSecrets is described in the [images documentation](images.md#specifying-imagepullsecrets-on-a-pod)
 
 ### Automatic use of Manually Created Secrets
 
 *This feature is planned but not implemented.  See [issue
-9902](https://github.com/GoogleCloudPlatform/kubernetes/issues/9902).*
+9902](http://issue.k8s.io/9902).*
 
 You can reference manually created secrets from a [service account](service-accounts.md).
 Then, pods which use that service account will have
@@ -504,6 +504,9 @@ On most Kubernetes-project-maintained distributions, communication between user
 to the apiserver, and from apiserver to the kubelets, is protected by SSL/TLS.
 Secrets are protected when transmitted over these channels.
 
+Secret data on nodes is stored in tmpfs volumes and thus does not come to rest
+on the node.
+
 There may be secrets for several pods on the same node.  However, only the
 secrets that a pod requests are potentially visible within its containers.
 Therefore, one Pod does not have access to the secrets of another pod.
@@ -515,12 +518,16 @@ Pod level](#use-case-two-containers).
 
 ### Risks
 
+ - In the API server secret data is stored as plaintext in etcd; therefore:
+   - Administrators should limit access to etcd to admin users
+   - Secret data in the API server is at rest on the disk that etcd uses; admins may want to wipe/shred disks
+     used by etcd when no longer in use
  - Applications still need to protect the value of secret after reading it from the volume,
    such as not accidentally logging it or transmitting it to an untrusted party.
  - A user who can create a pod that uses a secret can also see the value of that secret.  Even
    if apiserver policy does not allow that user to read the secret object, the user could
    run a pod which exposes the secret.
-   If multiple replicas of etcd are run, then the secrets will be shared between them.
+ - If multiple replicas of etcd are run, then the secrets will be shared between them.
    By default, etcd does not secure peer-to-peer communication with SSL/TLS, though this can be configured.
  - It is not possible currently to control which users of a Kubernetes cluster can
    access a secret.  Support for this is planned.

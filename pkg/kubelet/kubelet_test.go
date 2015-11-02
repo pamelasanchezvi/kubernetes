@@ -31,25 +31,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	apierrors "github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/resource"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/testapi"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/capabilities"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/record"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client/testclient"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/cadvisor"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/container"
-	kubecontainer "github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/container"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/kubelet/network"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/types"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/version"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/volume"
-	_ "github.com/GoogleCloudPlatform/kubernetes/pkg/volume/host_path"
 	cadvisorApi "github.com/google/cadvisor/info/v1"
 	cadvisorApiv2 "github.com/google/cadvisor/info/v2"
+	"k8s.io/kubernetes/pkg/api"
+	apierrors "k8s.io/kubernetes/pkg/api/errors"
+	"k8s.io/kubernetes/pkg/api/resource"
+	"k8s.io/kubernetes/pkg/api/testapi"
+	"k8s.io/kubernetes/pkg/capabilities"
+	"k8s.io/kubernetes/pkg/client/record"
+	"k8s.io/kubernetes/pkg/client/testclient"
+	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
+	"k8s.io/kubernetes/pkg/kubelet/container"
+	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+	"k8s.io/kubernetes/pkg/kubelet/network"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/types"
+	"k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/version"
+	"k8s.io/kubernetes/pkg/volume"
+	_ "k8s.io/kubernetes/pkg/volume/host_path"
 )
 
 func init() {
@@ -390,7 +390,7 @@ func TestSyncPodsDeletesWhenSourcesAreReady(t *testing.T) {
 func TestMountExternalVolumes(t *testing.T) {
 	testKubelet := newTestKubelet(t)
 	kubelet := testKubelet.kubelet
-	kubelet.volumePluginMgr.InitPlugins([]volume.VolumePlugin{&volume.FakeVolumePlugin{"fake", nil}}, &volumeHost{kubelet})
+	kubelet.volumePluginMgr.InitPlugins([]volume.VolumePlugin{&volume.FakeVolumePlugin{PluginName: "fake", Host: nil}}, &volumeHost{kubelet})
 
 	pod := api.Pod{
 		ObjectMeta: api.ObjectMeta{
@@ -409,7 +409,7 @@ func TestMountExternalVolumes(t *testing.T) {
 	}
 	podVolumes, err := kubelet.mountExternalVolumes(&pod)
 	if err != nil {
-		t.Errorf("Expected sucess: %v", err)
+		t.Errorf("Expected success: %v", err)
 	}
 	expectedPodVolumes := []string{"vol1"}
 	if len(expectedPodVolumes) != len(podVolumes) {
@@ -425,7 +425,7 @@ func TestMountExternalVolumes(t *testing.T) {
 func TestGetPodVolumesFromDisk(t *testing.T) {
 	testKubelet := newTestKubelet(t)
 	kubelet := testKubelet.kubelet
-	plug := &volume.FakeVolumePlugin{"fake", nil}
+	plug := &volume.FakeVolumePlugin{PluginName: "fake", Host: nil}
 	kubelet.volumePluginMgr.InitPlugins([]volume.VolumePlugin{plug}, &volumeHost{kubelet})
 
 	volsOnDisk := []struct {
@@ -439,7 +439,7 @@ func TestGetPodVolumesFromDisk(t *testing.T) {
 
 	expectedPaths := []string{}
 	for i := range volsOnDisk {
-		fv := volume.FakeVolume{volsOnDisk[i].podUID, volsOnDisk[i].volName, plug}
+		fv := volume.FakeVolume{PodUID: volsOnDisk[i].podUID, VolName: volsOnDisk[i].volName, Plugin: plug}
 		fv.SetUp()
 		expectedPaths = append(expectedPaths, fv.GetPath())
 	}
@@ -1187,6 +1187,15 @@ func TestMakeEnvironmentVariables(t *testing.T) {
 							},
 						},
 					},
+					{
+						Name: "POD_IP",
+						ValueFrom: &api.EnvVarSource{
+							FieldRef: &api.ObjectFieldSelector{
+								APIVersion: testapi.Version(),
+								FieldPath:  "status.podIP",
+							},
+						},
+					},
 				},
 			},
 			masterServiceNs: "nothing",
@@ -1194,6 +1203,7 @@ func TestMakeEnvironmentVariables(t *testing.T) {
 			expectedEnvs: []kubecontainer.EnvVar{
 				{Name: "POD_NAME", Value: "dapi-test-pod-name"},
 				{Name: "POD_NAMESPACE", Value: "downward-api"},
+				{Name: "POD_IP", Value: "1.2.3.4"},
 			},
 		},
 		{
@@ -1345,6 +1355,7 @@ func TestMakeEnvironmentVariables(t *testing.T) {
 				Name:      "dapi-test-pod-name",
 			},
 		}
+		testPod.Status.PodIP = "1.2.3.4"
 
 		result, err := kl.makeEnvironmentVariables(testPod, tc.container)
 		if err != nil {
@@ -2100,7 +2111,7 @@ func TestHandleMemExceeded(t *testing.T) {
 	testKubelet.fakeCadvisor.On("RootFsInfo").Return(cadvisorApiv2.FsInfo{}, nil)
 
 	spec := api.PodSpec{Containers: []api.Container{{Resources: api.ResourceRequirements{
-		Limits: api.ResourceList{
+		Requests: api.ResourceList{
 			"memory": resource.MustParse("90"),
 		},
 	}}}}
@@ -2314,7 +2325,10 @@ func TestUpdateNewNodeStatus(t *testing.T) {
 				api.ResourceMemory: *resource.NewQuantity(1024, resource.BinarySI),
 				api.ResourcePods:   *resource.NewQuantity(0, resource.DecimalSI),
 			},
-			Addresses: []api.NodeAddress{{Type: api.NodeLegacyHostIP, Address: "127.0.0.1"}},
+			Addresses: []api.NodeAddress{
+				{Type: api.NodeLegacyHostIP, Address: "127.0.0.1"},
+				{Type: api.NodeInternalIP, Address: "127.0.0.1"},
+			},
 		},
 	}
 
@@ -2322,10 +2336,14 @@ func TestUpdateNewNodeStatus(t *testing.T) {
 	if err := kubelet.updateNodeStatus(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if len(kubeClient.Actions) != 2 || kubeClient.Actions[1].Action != "update-status-node" {
-		t.Fatalf("unexpected actions: %v", kubeClient.Actions)
+	actions := kubeClient.Actions()
+	if len(actions) != 2 {
+		t.Fatalf("unexpected actions: %v", actions)
 	}
-	updatedNode, ok := kubeClient.Actions[1].Value.(*api.Node)
+	if !actions[1].Matches("update", "nodes") || actions[1].GetSubresource() != "status" {
+		t.Fatalf("unexpected actions: %v", actions)
+	}
+	updatedNode, ok := actions[1].(testclient.UpdateAction).GetObject().(*api.Node)
 	if !ok {
 		t.Errorf("unexpected object type")
 	}
@@ -2411,7 +2429,10 @@ func TestUpdateExistingNodeStatus(t *testing.T) {
 				api.ResourceMemory: *resource.NewQuantity(1024, resource.BinarySI),
 				api.ResourcePods:   *resource.NewQuantity(0, resource.DecimalSI),
 			},
-			Addresses: []api.NodeAddress{{Type: api.NodeLegacyHostIP, Address: "127.0.0.1"}},
+			Addresses: []api.NodeAddress{
+				{Type: api.NodeLegacyHostIP, Address: "127.0.0.1"},
+				{Type: api.NodeInternalIP, Address: "127.0.0.1"},
+			},
 		},
 	}
 
@@ -2419,10 +2440,15 @@ func TestUpdateExistingNodeStatus(t *testing.T) {
 	if err := kubelet.updateNodeStatus(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if len(kubeClient.Actions) != 2 {
-		t.Errorf("unexpected actions: %v", kubeClient.Actions)
+	actions := kubeClient.Actions()
+	if len(actions) != 2 {
+		t.Errorf("unexpected actions: %v", actions)
 	}
-	updatedNode, ok := kubeClient.Actions[1].Value.(*api.Node)
+	updateAction, ok := actions[1].(testclient.UpdateAction)
+	if !ok {
+		t.Errorf("unexpected action type.  expected UpdateAction, got %#v", actions[1])
+	}
+	updatedNode, ok := updateAction.GetObject().(*api.Node)
 	if !ok {
 		t.Errorf("unexpected object type")
 	}
@@ -2497,7 +2523,10 @@ func TestUpdateNodeStatusWithoutContainerRuntime(t *testing.T) {
 				api.ResourceMemory: *resource.NewQuantity(1024, resource.BinarySI),
 				api.ResourcePods:   *resource.NewQuantity(0, resource.DecimalSI),
 			},
-			Addresses: []api.NodeAddress{{Type: api.NodeLegacyHostIP, Address: "127.0.0.1"}},
+			Addresses: []api.NodeAddress{
+				{Type: api.NodeLegacyHostIP, Address: "127.0.0.1"},
+				{Type: api.NodeInternalIP, Address: "127.0.0.1"},
+			},
 		},
 	}
 
@@ -2506,12 +2535,16 @@ func TestUpdateNodeStatusWithoutContainerRuntime(t *testing.T) {
 	if err := kubelet.updateNodeStatus(); err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if len(kubeClient.Actions) != 2 || kubeClient.Actions[1].Action != "update-status-node" {
-		t.Fatalf("unexpected actions: %v", kubeClient.Actions)
+	actions := kubeClient.Actions()
+	if len(actions) != 2 {
+		t.Fatalf("unexpected actions: %v", actions)
 	}
-	updatedNode, ok := kubeClient.Actions[1].Value.(*api.Node)
+	if !actions[1].Matches("update", "nodes") || actions[1].GetSubresource() != "status" {
+		t.Fatalf("unexpected actions: %v", actions)
+	}
+	updatedNode, ok := actions[1].(testclient.UpdateAction).GetObject().(*api.Node)
 	if !ok {
-		t.Errorf("unexpected object type")
+		t.Errorf("unexpected action type.  expected UpdateAction, got %#v", actions[1])
 	}
 
 	if updatedNode.Status.Conditions[0].LastHeartbeatTime.IsZero() {
@@ -2536,8 +2569,8 @@ func TestUpdateNodeStatusError(t *testing.T) {
 	if err := kubelet.updateNodeStatus(); err == nil {
 		t.Errorf("unexpected non error: %v", err)
 	}
-	if len(testKubelet.fakeKubeClient.Actions) != nodeStatusUpdateRetry {
-		t.Errorf("unexpected actions: %v", testKubelet.fakeKubeClient.Actions)
+	if len(testKubelet.fakeKubeClient.Actions()) != nodeStatusUpdateRetry {
+		t.Errorf("unexpected actions: %v", testKubelet.fakeKubeClient.Actions())
 	}
 }
 
@@ -2923,13 +2956,8 @@ func TestRegisterExistingNodeWithApiserver(t *testing.T) {
 	testKubelet := newTestKubelet(t)
 	kubelet := testKubelet.kubelet
 	kubeClient := testKubelet.fakeKubeClient
-	kubeClient.ReactFn = func(action testclient.FakeAction) (runtime.Object, error) {
-		segments := strings.Split(action.Action, "-")
-		if len(segments) < 2 {
-			return nil, fmt.Errorf("unrecognized action, need two or three segments <verb>-<resource> or <verb>-<subresource>-<resource>: %s", action.Action)
-		}
-		verb := segments[0]
-		switch verb {
+	kubeClient.ReactFn = func(action testclient.Action) (runtime.Object, error) {
+		switch action.GetVerb() {
 		case "create":
 			// Return an error on create.
 			return &api.Node{}, &apierrors.StatusError{
@@ -2942,7 +2970,7 @@ func TestRegisterExistingNodeWithApiserver(t *testing.T) {
 				Spec:       api.NodeSpec{ExternalID: testKubeletHostname},
 			}, nil
 		default:
-			return nil, fmt.Errorf("no reaction implemented for %s", action.Action)
+			return nil, fmt.Errorf("no reaction implemented for %s", action)
 		}
 	}
 	machineInfo := &cadvisorApi.MachineInfo{
@@ -3123,7 +3151,7 @@ func TestSyncPodsSetStatusToFailedForPodsThatRunTooLong(t *testing.T) {
 	podFullName := kubecontainer.GetPodFullName(pods[0])
 	status, found := kubelet.statusManager.GetPodStatus(podFullName)
 	if !found {
-		t.Errorf("expected to found status for pod %q", status)
+		t.Errorf("expected to found status for pod %q", podFullName)
 	}
 	if status.Phase != api.PodFailed {
 		t.Fatalf("expected pod status %q, ot %q.", api.PodFailed, status.Phase)
@@ -3178,7 +3206,7 @@ func TestSyncPodsDoesNotSetPodsThatDidNotRunTooLongToFailed(t *testing.T) {
 	podFullName := kubecontainer.GetPodFullName(pods[0])
 	status, found := kubelet.statusManager.GetPodStatus(podFullName)
 	if !found {
-		t.Errorf("expected to found status for pod %q", status)
+		t.Errorf("expected to found status for pod %q", podFullName)
 	}
 	if status.Phase == api.PodFailed {
 		t.Fatalf("expected pod status to not be %q", status.Phase)

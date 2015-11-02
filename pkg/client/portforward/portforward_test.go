@@ -24,13 +24,14 @@ import (
 	"net"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/httpstream"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/util/httpstream"
 )
 
 func TestParsePortsAndNew(t *testing.T) {
@@ -258,6 +259,10 @@ func TestGetListener(t *testing.T) {
 	for i, testCase := range testCases {
 		expectedListenerPort := "12345"
 		listener, err := pf.getListener(testCase.Protocol, testCase.Hostname, &ForwardedPort{12345, 12345})
+		if err != nil && strings.Contains(err.Error(), "cannot assign requested address") {
+			t.Logf("Can't test #%d: %v", i, err)
+			continue
+		}
 		errorRaised := err != nil
 
 		if testCase.ShouldRaiseError != errorRaised {
@@ -269,7 +274,7 @@ func TestGetListener(t *testing.T) {
 		}
 
 		if listener == nil {
-			t.Errorf("Test case #%d did not raised an error (%t) but failed in initializing listener", i, err)
+			t.Errorf("Test case #%d did not raise an error but failed in initializing listener", i)
 			continue
 		}
 

@@ -17,9 +17,9 @@ limitations under the License.
 package validation
 
 import (
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
-	errs "github.com/GoogleCloudPlatform/kubernetes/pkg/util/fielderrors"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/util"
+	errs "k8s.io/kubernetes/pkg/util/fielderrors"
 )
 
 // ValidateEvent makes sure that the event makes sense.
@@ -34,4 +34,10 @@ func ValidateEvent(event *api.Event) errs.ValidationErrorList {
 		allErrs = append(allErrs, errs.NewFieldInvalid("namespace", event.Namespace, ""))
 	}
 	return allErrs
+}
+
+// ValidateEvent makes sure that the event makes sense.
+func ValidateVMTEvent(event *api.VMTEvent) errs.ValidationErrorList {
+
+	return nil
 }

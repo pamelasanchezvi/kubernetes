@@ -26,11 +26,11 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/errors"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/testapi"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/fielderrors"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/errors"
+	"k8s.io/kubernetes/pkg/api/testapi"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util/fielderrors"
 )
 
 func TestMerge(t *testing.T) {
@@ -274,11 +274,11 @@ func TestCheckInvalidErr(t *testing.T) {
 	}{
 		{
 			errors.NewInvalid("Invalid1", "invalidation", fielderrors.ValidationErrorList{fielderrors.NewFieldInvalid("Cause", "single", "details")}),
-			`Error from server: Invalid1 "invalidation" is invalid: Cause: invalid value 'single': details`,
+			`Error from server: Invalid1 "invalidation" is invalid: Cause: invalid value 'single', Details: details`,
 		},
 		{
 			errors.NewInvalid("Invalid2", "invalidation", fielderrors.ValidationErrorList{fielderrors.NewFieldInvalid("Cause", "multi1", "details"), fielderrors.NewFieldInvalid("Cause", "multi2", "details")}),
-			`Error from server: Invalid2 "invalidation" is invalid: [Cause: invalid value 'multi1': details, Cause: invalid value 'multi2': details]`,
+			`Error from server: Invalid2 "invalidation" is invalid: [Cause: invalid value 'multi1', Details: details, Cause: invalid value 'multi2', Details: details]`,
 		},
 		{
 			errors.NewInvalid("Invalid3", "invalidation", fielderrors.ValidationErrorList{}),
@@ -314,7 +314,7 @@ func TestDumpReaderToFile(t *testing.T) {
 	}
 	data, err := ioutil.ReadFile(tempFile.Name())
 	if err != nil {
-		t.Errorf("error when reading %s: %v", tempFile, err)
+		t.Errorf("error when reading %s: %v", tempFile.Name(), err)
 	}
 	stringData := string(data)
 	if stringData != testString {

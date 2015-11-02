@@ -73,7 +73,7 @@ spec:  # specification of the pod’s contents
 
 The value of `metadata.name`, `hello-world`, will be the name of the pod resource created, and must be unique within the cluster, whereas `containers[0].name` is just a nickname for the container within that pod. `image` is the name of the Docker image, which Kubernetes expects to be able to pull from a registry, the [Docker Hub](https://registry.hub.docker.com/) by default.
 
-`restartPolicy: Never` indicates that we just want to run the container once and then terminate the pod. 
+`restartPolicy: Never` indicates that we just want to run the container once and then terminate the pod.
 
 The [`command`](containers.md#containers-and-commands) overrides the Docker container’s `Entrypoint`. Command arguments (corresponding to Docker’s `Cmd`) may be specified using `args`, as follows:
 
@@ -103,7 +103,7 @@ Let’s say you specified `entrypoint` instead of `command`. You’d see output 
 
 ```console
 I0709 06:33:05.600829   14160 schema.go:126] unknown field: entrypoint
-I0709 06:33:05.600988   14160 schema.go:129] this may be a false alarm, see https://github.com/GoogleCloudPlatform/kubernetes/issues/6842
+I0709 06:33:05.600988   14160 schema.go:129] this may be a false alarm, see http://issue.k8s.io/6842
 pods/hello-world
 ```
 
@@ -142,7 +142,7 @@ However, a shell isn’t necessary just to expand environment variables. Kuberne
 
 ## Viewing pod status
 
-You can see the pod you created (actually all of your cluster's pods) using the `get` command. 
+You can see the pod you created (actually all of your cluster's pods) using the `get` command.
 
 If you’re quick, it will look as follows:
 
@@ -199,7 +199,7 @@ $ kubectl delete pods/hello-world
 pods/hello-world
 ```
 
-Terminated pods aren’t currently automatically deleted, so that you can observe their final status, so be sure to clean up your dead pods. 
+Terminated pods aren’t currently automatically deleted, so that you can observe their final status, so be sure to clean up your dead pods.
 
 On the other hand, containers and their logs are eventually deleted automatically in order to free up disk space on the nodes.
 

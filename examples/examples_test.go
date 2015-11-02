@@ -25,15 +25,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/latest"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/api/validation"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/capabilities"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/runtime"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/util/yaml"
-	schedulerapi "github.com/GoogleCloudPlatform/kubernetes/plugin/pkg/scheduler/api"
-	schedulerapilatest "github.com/GoogleCloudPlatform/kubernetes/plugin/pkg/scheduler/api/latest"
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/api"
+	"k8s.io/kubernetes/pkg/api/latest"
+	"k8s.io/kubernetes/pkg/api/validation"
+	"k8s.io/kubernetes/pkg/capabilities"
+	"k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/util/yaml"
+	schedulerapi "k8s.io/kubernetes/plugin/pkg/scheduler/api"
+	schedulerapilatest "k8s.io/kubernetes/plugin/pkg/scheduler/api/latest"
 )
 
 func validateObject(obj runtime.Object) (errors []error) {
@@ -252,7 +252,7 @@ func TestExampleObjectSchemas(t *testing.T) {
 			"namespace-dev":  &api.Namespace{},
 			"namespace-prod": &api.Namespace{},
 		},
-		"../docs/user-guide/limitrange": {
+		"../docs/admin/limitrange": {
 			"invalid-pod": &api.Pod{},
 			"limits":      &api.LimitRange{},
 			"namespace":   &api.Namespace{},
@@ -283,8 +283,14 @@ func TestExampleObjectSchemas(t *testing.T) {
 			"pod": &api.Pod{},
 		},
 		"../examples/openshift-origin": {
-			"openshift-controller": &api.ReplicationController{},
-			"openshift-service":    &api.Service{},
+			"openshift-origin-namespace": &api.Namespace{},
+			"openshift-controller":       &api.ReplicationController{},
+			"openshift-service":          &api.Service{},
+			"etcd-controller":            &api.ReplicationController{},
+			"etcd-service":               &api.Service{},
+			"etcd-discovery-controller":  &api.ReplicationController{},
+			"etcd-discovery-service":     &api.Service{},
+			"secret":                     nil,
 		},
 		"../examples/phabricator": {
 			"authenticator-controller": &api.ReplicationController{},
@@ -317,6 +323,7 @@ func TestExampleObjectSchemas(t *testing.T) {
 			"spark-master-service":    &api.Service{},
 			"spark-master":            &api.Pod{},
 			"spark-worker-controller": &api.ReplicationController{},
+			"spark-driver":            &api.Pod{},
 		},
 		"../examples/storm": {
 			"storm-nimbus-service":    &api.Service{},
