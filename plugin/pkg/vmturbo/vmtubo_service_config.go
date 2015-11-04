@@ -6,6 +6,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/fields"
 
+	vmtcache "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/cache"
 	vmtmeta "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
 )
 
@@ -13,9 +14,9 @@ import (
 type Config struct {
 	Client        *client.Client
 	Meta          *vmtmeta.VMTMeta
-	NodeQueue     *cache.HashedFIFO
-	PodQueue      *cache.HashedFIFO
-	VMTEventQueue *cache.HashedFIFO
+	NodeQueue     *vmtcache.HashedFIFO
+	PodQueue      *vmtcache.HashedFIFO
+	VMTEventQueue *vmtcache.HashedFIFO
 	// Close this to stop all reflectors
 	StopEverything chan struct{}
 }
@@ -25,9 +26,9 @@ func NewVMTConfig(client *client.Client, meta *vmtmeta.VMTMeta) *Config {
 	config := &Config{
 		Client:         client,
 		Meta:           meta,
-		NodeQueue:      cache.NewHashedFIFO(cache.MetaNamespaceKeyFunc),
-		PodQueue:       cache.NewHashedFIFO(cache.MetaNamespaceKeyFunc),
-		VMTEventQueue:  cache.NewHashedFIFO(cache.MetaNamespaceKeyFunc),
+		NodeQueue:      vmtcache.NewHashedFIFO(cache.MetaNamespaceKeyFunc),
+		PodQueue:       vmtcache.NewHashedFIFO(cache.MetaNamespaceKeyFunc),
+		VMTEventQueue:  vmtcache.NewHashedFIFO(cache.MetaNamespaceKeyFunc),
 		StopEverything: make(chan struct{}),
 	}
 

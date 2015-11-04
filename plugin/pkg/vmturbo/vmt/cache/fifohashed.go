@@ -18,6 +18,8 @@ package cache
 
 import (
 	"sync"
+
+	"k8s.io/kubernetes/pkg/client/cache"
 )
 
 // HashedFIFO receives adds and updates from a Reflector, and puts them in a queue for
@@ -40,11 +42,11 @@ type HashedFIFO struct {
 	queue []string
 	// keyFunc is used to make the key used for queued item insertion and retrieval, and
 	// should be deterministic.
-	keyFunc KeyFunc
+	keyFunc cache.KeyFunc
 }
 
 var (
-	_ = Queue(&HashedFIFO{}) // HashedFIFO is a Queue
+	_ = cache.Queue(&HashedFIFO{}) // HashedFIFO is a Queue
 )
 
 // Add inserts an item, and puts it in the queue. The item is only enqueued
@@ -52,7 +54,7 @@ var (
 func (f *HashedFIFO) Add(obj interface{}) error {
 	id, err := f.keyFunc(obj)
 	if err != nil {
-		return KeyError{obj, err}
+		return cache.KeyError{obj, err}
 	}
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -73,7 +75,7 @@ func (f *HashedFIFO) Add(obj interface{}) error {
 func (f *HashedFIFO) AddIfNotPresent(obj interface{}) error {
 	id, err := f.keyFunc(obj)
 	if err != nil {
-		return KeyError{obj, err}
+		return cache.KeyError{obj, err}
 	}
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -98,7 +100,7 @@ func (f *HashedFIFO) Update(obj interface{}) error {
 func (f *HashedFIFO) Delete(obj interface{}) error {
 	id, err := f.keyFunc(obj)
 	if err != nil {
-		return KeyError{obj, err}
+		return cache.KeyError{obj, err}
 	}
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -137,7 +139,7 @@ func (f *HashedFIFO) ListKeys() []string {
 func (f *HashedFIFO) Get(obj interface{}) (item interface{}, exists bool, err error) {
 	key, err := f.keyFunc(obj)
 	if err != nil {
-		return nil, false, KeyError{obj, err}
+		return nil, false, cache.KeyError{obj, err}
 	}
 	return f.GetByKey(key)
 }
@@ -183,7 +185,7 @@ func (f *HashedFIFO) Replace(list []interface{}) error {
 	for _, item := range list {
 		key, err := f.keyFunc(item)
 		if err != nil {
-			return KeyError{item, err}
+			return cache.KeyError{item, err}
 		}
 		items[key] = item
 	}
@@ -203,7 +205,7 @@ func (f *HashedFIFO) Replace(list []interface{}) error {
 
 // NewHashedFIFO returns a Store which can be used to queue up items to
 // process.
-func NewHashedFIFO(keyFunc KeyFunc) *HashedFIFO {
+func NewHashedFIFO(keyFunc cache.KeyFunc) *HashedFIFO {
 	f := &HashedFIFO{
 		items:   map[string]interface{}{},
 		queue:   []string{},

@@ -1,6 +1,9 @@
 package communicator
 
 import (
+	"encoding/base64"
+	"net/http"
+
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/websocket"
@@ -70,7 +73,19 @@ func (wsc *WebSocketCommunicator) RegisterAndListen(registrationMessage *Mediati
 	localAddr := "http://172.16.201.167/"
 
 	glog.V(3).Infof("Dial Server: %s", vmtServerUrl)
-	webs, err := websocket.Dial(vmtServerUrl, "", localAddr)
+
+	config, err := websocket.NewConfig(vmtServerUrl, localAddr)
+	if err != nil {
+		glog.Fatal(err)
+	}
+	usrpasswd := []byte("vmtRemoteMediation:vmtRemoteMediation")
+
+	config.Header = http.Header{
+		"Authorization": {"Basic " + base64.StdEncoding.EncodeToString(usrpasswd)},
+	}
+	webs, err := websocket.DialConfig(config)
+
+	// webs, err := websocket.Dial(vmtServerUrl, "", localAddr)
 	if err != nil {
 		glog.Fatal(err)
 	}
