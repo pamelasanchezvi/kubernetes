@@ -19,6 +19,9 @@ type ServerMessageHandler interface {
 
 type WebSocketCommunicator struct {
 	VmtServerAddress string
+	LocalAddress     string
+	ServerUsername   string
+	ServerPassword   string
 	ServerMsgHandler ServerMessageHandler
 	ws               *websocket.Conn
 }
@@ -70,7 +73,7 @@ func (wsc *WebSocketCommunicator) SendClientMessage(clientMsg *MediationClientMe
 func (wsc *WebSocketCommunicator) RegisterAndListen(registrationMessage *MediationClientMessage) {
 	// vmtServerUrl := "ws://10.10.173.154:8080/vmturbo/remoteMediation"
 	vmtServerUrl := "ws://" + wsc.VmtServerAddress + "/vmturbo/remoteMediation"
-	localAddr := "http://172.16.201.167/"
+	localAddr := wsc.LocalAddress
 
 	glog.V(3).Infof("Dial Server: %s", vmtServerUrl)
 
@@ -78,7 +81,7 @@ func (wsc *WebSocketCommunicator) RegisterAndListen(registrationMessage *Mediati
 	if err != nil {
 		glog.Fatal(err)
 	}
-	usrpasswd := []byte("vmtRemoteMediation:vmtRemoteMediation")
+	usrpasswd := []byte(wsc.ServerUsername + ":" + wsc.ServerPassword)
 
 	config.Header = http.Header{
 		"Authorization": {"Basic " + base64.StdEncoding.EncodeToString(usrpasswd)},

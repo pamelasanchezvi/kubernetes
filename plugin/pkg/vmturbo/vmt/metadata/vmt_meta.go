@@ -17,23 +17,34 @@ const (
 	// Ops Manager related
 	OPS_MGR_USRN = "administrator"
 	OPS_MGR_PSWD = "a"
+
+	//WebSocket related
+	LOCAL_ADDRESS    = "http://172.16.201.167/"
+	WS_SERVER_USRN   = "vmtRemoteMediation"
+	WS_SERVER_PASSWD = "vmtRemoteMediation"
 )
 
 type VMTMeta struct {
-	ServerAddress    string
-	TargetType       string
-	NameOrAddress    string
-	TargetIdentifier string
-	Password         string
+	ServerAddress     string
+	TargetType        string
+	NameOrAddress     string
+	TargetIdentifier  string
+	Password          string
+	LocalAddress      string
+	WebSocketUsername string
+	WebSocketPassword string
 }
 
 func NewVMTMeta(serverAddr, targetType, nameOrAddress, targetIdentifier, password string) *VMTMeta {
 	meta := &VMTMeta{
-		ServerAddress:    SERVER_ADDRESS,
-		TargetType:       TARGET_TYPE,
-		NameOrAddress:    NAME_OR_ADDRESS,
-		TargetIdentifier: TARGET_IDENTIFIER,
-		Password:         PASSWORD,
+		ServerAddress:     SERVER_ADDRESS,
+		TargetType:        TARGET_TYPE,
+		NameOrAddress:     NAME_OR_ADDRESS,
+		TargetIdentifier:  TARGET_IDENTIFIER,
+		Password:          PASSWORD,
+		LocalAddress:      LOCAL_ADDRESS,
+		WebSocketUsername: WS_SERVER_USRN,
+		WebSocketPassword: WS_SERVER_PASSWD,
 	}
 	if serverAddr != "" {
 		meta.ServerAddress = serverAddr

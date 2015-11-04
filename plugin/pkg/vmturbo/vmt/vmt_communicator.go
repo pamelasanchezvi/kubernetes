@@ -1,6 +1,8 @@
 package vmt
 
 import (
+	"time"
+
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client"
 
@@ -62,6 +64,8 @@ func (handler *KubernetesServerMessageHandler) Validate(serverMsg *comm.Mediatio
 	clientMsg := comm.NewClientMessageBuilder(messageID).SetValidationResponse(validationResponse).Create()
 	handler.wsComm.SendClientMessage(clientMsg)
 
+	// TODO: Need to sleep some time, waiting validated. Or we should add reponse msg from server.
+	time.Sleep(100 * time.Millisecond)
 	handler.DiscoverTarget()
 }
 
@@ -144,6 +148,9 @@ func (vmtcomm *VMTCommunicator) Run() {
 func (vmtcomm *VMTCommunicator) Init() {
 	wsCommunicator := &comm.WebSocketCommunicator{
 		VmtServerAddress: vmtcomm.meta.ServerAddress,
+		LocalAddress:     vmtcomm.meta.LocalAddress,
+		ServerUsername:   vmtcomm.meta.WebSocketUsername,
+		ServerPassword:   vmtcomm.meta.WebSocketPassword,
 	}
 	vmtcomm.wsComm = wsCommunicator
 
