@@ -44,7 +44,7 @@ type ConfigFactory struct {
 	// queue for pods that need scheduling
 	PodQueue *cache.FIFO
 	// queue for nodes
-	NodeQueue *cache.HashedFIFO
+	NodeQueue *cache.FIFO
 	// a means to list all known scheduled pods.
 	ScheduledPodLister *cache.StoreToPodLister
 	// a means to list all known scheduled pods and pods assumed to have been scheduled.
@@ -70,7 +70,7 @@ func NewConfigFactory(client *client.Client, rateLimiter util.RateLimiter) *Conf
 	c := &ConfigFactory{
 		Client:             client,
 		PodQueue:           cache.NewFIFO(cache.MetaNamespaceKeyFunc),
-		NodeQueue:          cache.NewHashedFIFO(cache.MetaNamespaceKeyFunc),
+		NodeQueue:          cache.NewFIFO(cache.MetaNamespaceKeyFunc),
 		ScheduledPodLister: &cache.StoreToPodLister{},
 		// Only nodes in the "Ready" condition with status == "True" are schedulable
 		NodeLister:       &cache.StoreToNodeLister{Store: cache.NewStore(cache.MetaNamespaceKeyFunc)},
