@@ -100,8 +100,14 @@ func (handler *KubernetesServerMessageHandler) DiscoverTopology(serverMsg *comm.
 		return
 	}
 
+	appEntityDtos, err := kubeProbe.ParseApplication(api.NamespaceAll)
+	if err != nil {
+		return
+	}
+
 	entityDtos := nodeEntityDtos
 	entityDtos = append(entityDtos, podEntityDtos...)
+	entityDtos = append(entityDtos, appEntityDtos...)
 	discoveryResponse := &comm.DiscoveryResponse{
 		EntityDTO: entityDtos,
 	}
@@ -240,11 +246,20 @@ func createSupplyChain() []*sdk.TemplateDTO {
 	glog.V(3).Infof(".......... Now use builder to create a supply chain ..........")
 
 	minionSupplyChainNodeBuilder := sdk.NewSupplyChainNodeBuilder()
-	minionSupplyChainNodeBuilder = minionSupplyChainNodeBuilder.Entity(sdk.EntityDTO_VIRTUAL_MACHINE).Selling(sdk.CommodityDTO_CPU_ALLOCATION).Selling(sdk.CommodityDTO_MEM_ALLOCATION)
+	minionSupplyChainNodeBuilder = minionSupplyChainNodeBuilder.
+		Entity(sdk.EntityDTO_VIRTUAL_MACHINE).
+		Selling(sdk.CommodityDTO_CPU_ALLOCATION).
+		Selling(sdk.CommodityDTO_MEM_ALLOCATION).
+		Selling(sdk.CommodityDTO_VCPU).
+		Selling(sdk.CommodityDTO_VMEM)
 	glog.V(3).Infof(".......... minion supply chain node builder is created ..........")
 
+	// Pod Supplychain builder
 	podSupplyChainNodeBuilder := sdk.NewSupplyChainNodeBuilder()
-	podSupplyChainNodeBuilder = podSupplyChainNodeBuilder.Entity(sdk.EntityDTO_CONTAINER).Selling(sdk.CommodityDTO_CPU_ALLOCATION).Selling(sdk.CommodityDTO_MEM_ALLOCATION)
+	podSupplyChainNodeBuilder = podSupplyChainNodeBuilder.
+		Entity(sdk.EntityDTO_CONTAINER).
+		Selling(sdk.CommodityDTO_CPU_ALLOCATION).
+		Selling(sdk.CommodityDTO_MEM_ALLOCATION)
 
 	emptyKey := ""
 	cpuAllocationType := sdk.CommodityDTO_CPU_ALLOCATION
@@ -258,11 +273,43 @@ func createSupplyChain() []*sdk.TemplateDTO {
 		CommodityType: &memAllocationType,
 	}
 
-	podSupplyChainNodeBuilder = podSupplyChainNodeBuilder.Provider(sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_LAYERED_OVER).Buys(*cpuAllocationTemplateComm).Buys(*memAllocationTemplateComm)
+	podSupplyChainNodeBuilder = podSupplyChainNodeBuilder.
+		Provider(sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_LAYERED_OVER).
+		Buys(*cpuAllocationTemplateComm).
+		Buys(*memAllocationTemplateComm)
 	glog.V(3).Infof(".......... pod supply chain node builder is created ..........")
 
+	// Application supplychain builder
+	appSupplyChainNodeBuilder := sdk.NewSupplyChainNodeBuilder()
+	appSupplyChainNodeBuilder = appSupplyChainNodeBuilder.
+		Entity(sdk.EntityDTO_APPLICATION).
+		Selling(sdk.CommodityDTO_TRANSACTION)
+	// Buys CpuAllocation/MemAllocation from Pod
+	appCpuAllocationTemplateComm := &sdk.TemplateCommodity{
+		Key:           &emptyKey,
+		CommodityType: &cpuAllocationType,
+	}
+	appMemAllocationTemplateComm := &sdk.TemplateCommodity{
+		Key:           &emptyKey,
+		CommodityType: &memAllocationType,
+	}
+	appSupplyChainNodeBuilder = appSupplyChainNodeBuilder.Provider(sdk.EntityDTO_CONTAINER, sdk.Provider_LAYERED_OVER).Buys(*appCpuAllocationTemplateComm).Buys(*appMemAllocationTemplateComm)
+	// Buys VCpu and VMem from VM
+	vCpuType := sdk.CommodityDTO_VCPU
+	appVCpu := &sdk.TemplateCommodity{
+		Key:           &emptyKey,
+		CommodityType: &vCpuType,
+	}
+	vMemType := sdk.CommodityDTO_VMEM
+	appVMem := &sdk.TemplateCommodity{
+		Key:           &emptyKey,
+		CommodityType: &vMemType,
+	}
+	appSupplyChainNodeBuilder = appSupplyChainNodeBuilder.Provider(sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_HOSTING).Buys(*appVCpu).Buys(*appVMem)
+
 	supplyChainBuilder := sdk.NewSupplyChainBuilder()
-	supplyChainBuilder.Top(podSupplyChainNodeBuilder)
+	supplyChainBuilder.Top(appSupplyChainNodeBuilder)
+	supplyChainBuilder.Entity(podSupplyChainNodeBuilder)
 	supplyChainBuilder.Entity(minionSupplyChainNodeBuilder)
 
 	return supplyChainBuilder.Create()

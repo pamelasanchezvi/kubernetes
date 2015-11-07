@@ -10,12 +10,16 @@ import (
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
 
-	"github.com/vmturbo/vmturbo-go-sdk/sdk"
-
-	"github.com/google/cadvisor/info/v1"
+	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/cadvisor"
 
 	"github.com/golang/glog"
+	"github.com/google/cadvisor/info/v1"
+	info "github.com/google/cadvisor/info/v2"
+	"github.com/vmturbo/vmturbo-go-sdk/sdk"
 )
+
+var container2PodMap map[string]string = make(map[string]string)
+var hostSet map[string]*vmtAdvisor.Host = make(map[string]*vmtAdvisor.Host)
 
 type KubeProbe struct {
 	kubeClient *client.Client
@@ -59,12 +63,15 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		}
 
 		// use cadvisor to get machine info
-		cadvisor := &cadvisorSource{}
-		host := &Host{
+		cadvisor := &vmtAdvisor.CadvisorSource{}
+		host := &vmtAdvisor.Host{
 			IP:       nodeIP,
 			Port:     4194,
 			Resource: "",
 		}
+
+		hostSet[node.Name] = host
+
 		machineInfo, err := cadvisor.GetMachineInfo(*host)
 		if err != nil {
 			continue
@@ -117,6 +124,10 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_MEM_ALLOCATION, "Container").
 			Capacity(float64(nodeMemCapacity)).Used(memUsed)
 		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_CPU_ALLOCATION, "Container").
+			Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
+		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_VMEM, "Application").
+			Capacity(float64(nodeMemCapacity)).Used(memUsed)
+		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_VCPU, "Application").
 			Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
 		//entityDTOBuilder = entityDTOBuilder.setProvider(EntityDTOS_PhysicalMachine, machineUid)
 		//entityDTOBuilder = entityDTOBuilder.buys(CommodityDTOS_CPU, "", cpuUsed)
@@ -179,7 +190,7 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 	}
 
 	//Second, process pods according to each node
-	podContainers := make(map[string][]*Container)
+	podContainers := make(map[string][]*vmtAdvisor.Container)
 
 	// a pod to Node map
 	podNodeMap := make(map[string]*v1.MachineInfo)
@@ -188,10 +199,10 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 	for hostIP, _ := range nodePodsMap {
 
 		// use cadvisor to get all containers on that host
-		cadvisor := &cadvisorSource{}
+		cadvisor := &vmtAdvisor.CadvisorSource{}
 
 		// TODO, must check the port number for cAdvisor client is static.
-		host := &Host{
+		host := &vmtAdvisor.Host{
 			IP:       hostIP,
 			Port:     4194,
 			Resource: "",
@@ -215,18 +226,21 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 			if &spec != nil && container.Spec.Labels != nil {
 				// TODO! hardcoded here. Works but not good. Maybe can find better solution?
 				// The value returned here is namespace/podname
-				if value, ok := container.Spec.Labels["io.kubernetes.pod.name"]; ok {
-					glog.V(4).Infof("Container %s is in Pod %s", container.Name, value)
-					var containers []*Container
-					if ctns, exist := podContainers[value]; exist {
+				if podName, ok := container.Spec.Labels["io.kubernetes.pod.name"]; ok {
+					glog.V(3).Infof("Container %s is in Pod %s", container.Name, podName)
+					var containers []*vmtAdvisor.Container
+					if ctns, exist := podContainers[podName]; exist {
 						containers = ctns
 					}
 					containers = append(containers, container)
-					podContainers[value] = containers
+					podContainers[podName] = containers
+
+					// store in container2PodMap
+					container2PodMap[container.Name] = podName
 
 					// Store in pod node map.
-					if _, exist := podNodeMap[value]; !exist {
-						podNodeMap[value] = machineInfo
+					if _, exist := podNodeMap[podName]; !exist {
+						podNodeMap[podName] = machineInfo
 					}
 				}
 			}
@@ -312,8 +326,8 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 		glog.V(4).Infof("The actual Mem used value of %s is %f", id, podMemUsed)
 
 		entityDTOBuilder = entityDTOBuilder.DisplayName(dispName)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_MEM_ALLOCATION, "").Capacity(podMemCapacity).Used(podMemCapacity)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_CPU_ALLOCATION, "").Capacity(podCpuCapacity).Used(podCpuCapacity)
+		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_MEM_ALLOCATION, "Application").Capacity(podMemCapacity).Used(podMemUsed)
+		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_CPU_ALLOCATION, "Application").Capacity(podCpuCapacity).Used(podCpuUsed)
 		entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, minionId)
 		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, "Container", podCpuCapacity)
 		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, "Container", podMemCapacity)
@@ -329,8 +343,124 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 	return
 }
 
+// Parse processes those are defined in namespace.
+func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.EntityDTO, err error) {
+	glog.Infof("Has %d hosts", len(hostSet))
+
+	for nodeName, host := range hostSet {
+		glog.Infof("Now get process in host %s", nodeName)
+		// use cadvisor to get all process on that host
+		cadvisor := &vmtAdvisor.CadvisorSource{}
+		psInfors, err := cadvisor.GetProcessInfo(*host)
+		if err != nil {
+			glog.Errorf("Error parsing process %s", err)
+			return nil, err
+		}
+		if len(psInfors) < 1 {
+			glog.Warningf("No process find")
+			return result, nil
+		}
+
+		// Now all process info have been got. Group processes to pods
+		pod2ProcessesMap := make(map[string][]info.ProcessInfo)
+		for _, process := range psInfors {
+			// Here cgroupPath for a process is the same with the container name
+			cgroupPath := process.CgroupPath
+			if podName, exist := container2PodMap[cgroupPath]; exist {
+				glog.V(4).Infof("%s is in pod %s", process.Cmd, podName)
+				var processList []info.ProcessInfo
+				if processes, hasList := pod2ProcessesMap[podName]; hasList {
+					processList = processes
+				}
+				processList = append(processList, process)
+				pod2ProcessesMap[podName] = processList
+			}
+		}
+
+		for podN, processList := range pod2ProcessesMap {
+			for _, process := range processList {
+				glog.V(4).Infof("pod %s has the following process %s", podN, process.Cmd)
+			}
+		}
+
+		// The same processes should represent the same application
+		// key:podName, value: a map (key:process.Cmd, value: Application)
+		pod2ApplicationMap := make(map[string]map[string]vmtAdvisor.Application)
+		for podName, processList := range pod2ProcessesMap {
+			if _, exists := pod2ApplicationMap[podName]; !exists {
+				apps := make(map[string]vmtAdvisor.Application)
+				pod2ApplicationMap[podName] = apps
+			}
+			applications := pod2ApplicationMap[podName]
+			for _, process := range processList {
+				if _, hasApp := applications[process.Cmd]; !hasApp {
+					applications[process.Cmd] = vmtAdvisor.Application(process)
+				} else {
+					app := applications[process.Cmd]
+					app.PercentCpu = app.PercentCpu + process.PercentCpu
+					app.PercentMemory = app.PercentMemory + process.PercentMemory
+					applications[process.Cmd] = app
+				}
+			}
+		}
+
+		// In order to get the actual usage for each process, the CPU/Mem capacity
+		// for the machine must be retrieved.
+		machineInfo, err := cadvisor.GetMachineInfo(*host)
+		if err != nil {
+			glog.Warningf("Error getting machine info for %s when parsing process: %s", nodeName, err)
+			continue
+			// return nil, err
+		}
+		// The return cpu frequency is in KHz, we need MHz
+		cpuFrequency := machineInfo.CpuFrequency / 1000
+		// Get the node Cpu and Mem capacity.
+		nodeCpuCapacity := float64(machineInfo.NumCores) * float64(cpuFrequency)
+		nodeMemCapacity := float64(machineInfo.MemoryCapacity) / 1024 // Mem is returned in B
+
+		for podName, appMap := range pod2ApplicationMap {
+			for _, app := range appMap {
+				glog.Infof("pod %s has the following application %s", podName, app.Cmd)
+
+				// Use pod as Application for now
+				appEntityType := sdk.EntityDTO_APPLICATION
+				id := app.Cmd + "::" + podName
+				dispName := app.Cmd + "::" + podName
+				entityDTOBuilder := sdk.NewEntityDTOBuilder(appEntityType, id)
+
+				cpuUsage := nodeCpuCapacity * float64(app.PercentCpu/100)
+				memUsage := nodeMemCapacity * float64(app.PercentMemory/100)
+
+				glog.V(4).Infof("Percent Cpu for %s is %f, usage is %f", dispName, app.PercentCpu, cpuUsage)
+				glog.V(4).Infof("Percent Mem for %s is %f, usage is %f", dispName, app.PercentMemory, memUsage)
+
+				entityDTOBuilder = entityDTOBuilder.DisplayName(dispName)
+				entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_TRANSACTION, "").Capacity(10).Used(0)
+				entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_CONTAINER, podName)
+				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, "Application", cpuUsage)
+				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, "Application", memUsage)
+				entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, nodeName)
+				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VCPU, "Application", cpuUsage)
+				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VMEM, "Application", memUsage)
+
+				entityDto := entityDTOBuilder.Create()
+
+				appType := app.Cmd
+				ipAddress := ""
+				appData := &sdk.EntityDTO_ApplicationData{
+					Type:      &appType,
+					IpAddress: &ipAddress,
+				}
+				entityDto.ApplicationData = appData
+				result = append(result, entityDto)
+			}
+		}
+	}
+	return
+}
+
 // Show container stats for each container. For debug and troubleshooting purpose.
-func showContainerStats(container *Container) {
+func showContainerStats(container *vmtAdvisor.Container) {
 	glog.V(3).Infof("Host name %s", container.Hostname)
 	glog.V(3).Infof("Container name is %s", container.Name)
 	containerStats := container.Stats
