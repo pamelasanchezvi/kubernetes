@@ -32,7 +32,7 @@ func (kae *KubernetesActionExecutor) ExcuteAction(actionItem *sdk.ActionItemDTO,
 		// check if the targetSE is a Pod and the newSE is a VirtualMachine
 		// TODO, for now, we use container to represent a pod
 		glog.V(3).Infof("Now Move Pods.")
-		if actionItem.GetTargetSE().GetEntityType() == sdk.EntityDTO_CONTAINER && actionItem.GetNewSE().GetEntityType() == sdk.EntityDTO_VIRTUAL_MACHINE {
+		if actionItem.GetTargetSE().GetEntityType() == sdk.EntityDTO_CONTAINER_POD && actionItem.GetNewSE().GetEntityType() == sdk.EntityDTO_VIRTUAL_MACHINE {
 			targetPod := actionItem.GetTargetSE()
 			podIdentifier := targetPod.GetId()
 
@@ -84,6 +84,10 @@ func (this *KubernetesActionExecutor) MovePod(podIdentifier, namespace, targetNo
 		glog.V(3).Infof("Successfully delete pod %s.\n", podIdentifier)
 	}
 
+	// if targetNodeIdentifier == "1.1.1.1" {
+	// 	targetNodeIdentifier = "127.0.0.1"
+	// }
+
 	// TODO! For now the move aciton is accomplished by the MoveSimulator.
 	moveSimulator := &MoveSimulator{}
 	action := "move"
@@ -94,6 +98,7 @@ func (this *KubernetesActionExecutor) MovePod(podIdentifier, namespace, targetNo
 	// Here it first post action event onto etcd. Then other component watches etcd will get the move event.
 	vmtEvents := registry.NewVMTEvents(this.kubeClient, "")
 	event := registry.GenerateVMTEvent(action, namespace, podIdentifier, targetNodeIdentifier, int(msgID))
+	glog.V(3).Infof("vmt event is %v, msgId is %d, %d", event, msgID, int(msgID))
 	_, errorPost := vmtEvents.Create(event)
 	if errorPost != nil {
 		glog.Errorf("Error posting vmtevent: %s\n", errorPost)

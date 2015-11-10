@@ -257,7 +257,7 @@ func createSupplyChain() []*sdk.TemplateDTO {
 	// Pod Supplychain builder
 	podSupplyChainNodeBuilder := sdk.NewSupplyChainNodeBuilder()
 	podSupplyChainNodeBuilder = podSupplyChainNodeBuilder.
-		Entity(sdk.EntityDTO_CONTAINER).
+		Entity(sdk.EntityDTO_CONTAINER_POD).
 		Selling(sdk.CommodityDTO_CPU_ALLOCATION).
 		Selling(sdk.CommodityDTO_MEM_ALLOCATION)
 
@@ -293,7 +293,7 @@ func createSupplyChain() []*sdk.TemplateDTO {
 		Key:           &emptyKey,
 		CommodityType: &memAllocationType,
 	}
-	appSupplyChainNodeBuilder = appSupplyChainNodeBuilder.Provider(sdk.EntityDTO_CONTAINER, sdk.Provider_LAYERED_OVER).Buys(*appCpuAllocationTemplateComm).Buys(*appMemAllocationTemplateComm)
+	appSupplyChainNodeBuilder = appSupplyChainNodeBuilder.Provider(sdk.EntityDTO_CONTAINER_POD, sdk.Provider_LAYERED_OVER).Buys(*appCpuAllocationTemplateComm).Buys(*appMemAllocationTemplateComm)
 	// Buys VCpu and VMem from VM
 	vCpuType := sdk.CommodityDTO_VCPU
 	appVCpu := &sdk.TemplateCommodity{

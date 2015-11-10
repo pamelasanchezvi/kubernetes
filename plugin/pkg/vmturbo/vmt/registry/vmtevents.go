@@ -56,13 +56,11 @@ func (e *vmtevents) Get(name string) (*api.VMTEvent, error) {
 }
 
 // List returns a list of events matching the selectors.
-func (e *vmtevents) List(label labels.Selector, field fields.Selector) (*api.EventList, error) {
-	result := &api.EventList{}
+func (e *vmtevents) List() (*api.VMTEventList, error) {
+	result := &api.VMTEventList{}
 	err := e.client.Get().
 		NamespaceIfScoped(e.namespace, len(e.namespace) > 0).
 		Resource("vmtevents").
-		LabelsSelectorParam(label).
-		FieldsSelectorParam(field).
 		Do().
 		Into(result)
 	return result, err
@@ -78,6 +76,34 @@ func (e *vmtevents) Watch(label labels.Selector, field fields.Selector, resource
 		LabelsSelectorParam(label).
 		FieldsSelectorParam(field).
 		Watch()
+}
+
+// Delete deletes an existing event.
+func (e *vmtevents) Delete(name string) error {
+	return e.client.Delete().
+		NamespaceIfScoped(e.namespace, len(e.namespace) > 0).
+		Resource("vmtevents").
+		Name(name).
+		Do().
+		Error()
+}
+
+func (e *vmtevents) DeleteAll() error {
+	// events, err := e.List()
+	// if err != nil {
+	// 	return fmt.Errorf("Error listing all vmt events: %s", err)
+	// }
+	// for _, event := range events.Items {
+	// 	errDeleteSingle := e.Delete(event.Name)
+	// 	if errDeleteSingle != nil {
+	// 		return fmt.Errorf("Error delete %s: %s", event.Name, errDeleteSingle)
+	// 	}
+	// }
+	return e.client.Delete().
+		NamespaceIfScoped(e.namespace, len(e.namespace) > 0).
+		Resource("vmtevents").
+		Do().
+		Error()
 }
 
 // Build a new VMTEvent.

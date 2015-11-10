@@ -40,6 +40,13 @@ func (v *VMTurboService) Run() {
 	// register and validates to vmturbo server
 	go vmtCommunicator.Run()
 
+	//delete all the vmt events
+	vmtEvents := registry.NewVMTEvents(v.config.Client, "")
+	errorDelete := vmtEvents.DeleteAll()
+	if errorDelete != nil {
+		glog.V(3).Infof("Error deleting all vmt events: %s", errorDelete)
+	}
+
 	// These three go routine is responsible for watching corresponding watchable resource.
 	go util.Until(v.getNextNode, 0, v.config.StopEverything)
 	go util.Until(v.getNextPod, 0, v.config.StopEverything)
@@ -88,6 +95,8 @@ func (v *VMTurboService) getNextPod() {
 		// The right place of sending move reponse is after the event.
 		// Here for test purpose, send the move success action response.
 		if vmtEventFromEtcd.VMTMessageID > -1 {
+			glog.V(3).Infof("Get vmtevent %v", vmtEventFromEtcd)
+			glog.V(3).Infof("Send action response")
 			v.vmtcomm.SendActionReponse(sdk.ActionResponseState_SUCCEEDED, 100, int32(vmtEventFromEtcd.VMTMessageID), "Success")
 		}
 		v.vmtcomm.DiscoverTarget()

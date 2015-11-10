@@ -1,7 +1,7 @@
 package vmt
 
 import (
-	"fmt"
+	// "fmt"
 	"strconv"
 	"time"
 
@@ -89,7 +89,8 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		// To get a valid cpu usage, there must be at least 2 valid stats.
 		if len(containerStats) < 2 {
 			glog.Warning("Not enough data")
-			return nil, fmt.Errorf("Not enough status data of current node %s.", nodeIP)
+			continue
+			// return nil, fmt.Errorf("Not enough status data of current node %s.", nodeIP)
 		}
 		currentStat := containerStats[len(containerStats)-1]
 		prevStat := containerStats[len(containerStats)-2]
@@ -125,9 +126,9 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 			Capacity(float64(nodeMemCapacity)).Used(memUsed)
 		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_CPU_ALLOCATION, "Container").
 			Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_VMEM, "Application").
+		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_VMEM, id).
 			Capacity(float64(nodeMemCapacity)).Used(memUsed)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_VCPU, "Application").
+		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_VCPU, id).
 			Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
 		//entityDTOBuilder = entityDTOBuilder.setProvider(EntityDTOS_PhysicalMachine, machineUid)
 		//entityDTOBuilder = entityDTOBuilder.buys(CommodityDTOS_CPU, "", cpuUsed)
@@ -135,6 +136,24 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 
 		entityDto := entityDTOBuilder.Create()
 		result = append(result, entityDto)
+
+		// // create a fake VM
+		// entityDTOBuilder2 := sdk.NewEntityDTOBuilder(nodeEntityType, "1.1.1.1")
+		// // Find out the used value for each commodity
+		// cpuUsed = float64(0)
+		// memUsed = float64(0)
+		// // Build the entityDTO.
+		// entityDTOBuilder2 = entityDTOBuilder2.DisplayName("1.1.1.1")
+		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_MEM_ALLOCATION, "Container").
+		// 	Capacity(float64(nodeMemCapacity)).Used(memUsed)
+		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_CPU_ALLOCATION, "Container").
+		// 	Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
+		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_VMEM, "Application").
+		// 	Capacity(float64(nodeMemCapacity)).Used(memUsed)
+		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_VCPU, "Application").
+		// 	Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
+		// entityDto2 := entityDTOBuilder2.Create()
+		// result = append(result, entityDto2)
 	}
 
 	for _, entityDto := range result {
@@ -286,7 +305,8 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 				if len(containerStats) < 2 {
 					//TODO, maybe a warning is enough?
 					glog.Warningf("Not enough data for %s", podNameWithNamespace)
-					return nil, fmt.Errorf("Not enough data for %s", podNameWithNamespace)
+					continue
+					// return nil, fmt.Errorf("Not enough data for %s", podNameWithNamespace)
 				}
 				currentStat := containerStats[len(containerStats)-1]
 				prevStat := containerStats[len(containerStats)-2]
@@ -310,7 +330,7 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 		glog.V(4).Infof(" Pod %s Mem request is %f", pod.Name, podMemUsed)
 
 		// Use pod as Application for now
-		podEntityType := sdk.EntityDTO_CONTAINER
+		podEntityType := sdk.EntityDTO_CONTAINER_POD
 		id := podNameWithNamespace
 		dispName := podNameWithNamespace
 		entityDTOBuilder := sdk.NewEntityDTOBuilder(podEntityType, id)
@@ -326,8 +346,8 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 		glog.V(4).Infof("The actual Mem used value of %s is %f", id, podMemUsed)
 
 		entityDTOBuilder = entityDTOBuilder.DisplayName(dispName)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_MEM_ALLOCATION, "Application").Capacity(podMemCapacity).Used(podMemUsed)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_CPU_ALLOCATION, "Application").Capacity(podCpuCapacity).Used(podCpuUsed)
+		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_MEM_ALLOCATION, podNameWithNamespace).Capacity(podMemCapacity).Used(podMemCapacity)
+		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_CPU_ALLOCATION, podNameWithNamespace).Capacity(podCpuCapacity).Used(podCpuCapacity)
 		entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, minionId)
 		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, "Container", podCpuCapacity)
 		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, "Container", podMemCapacity)
@@ -436,20 +456,20 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 
 				entityDTOBuilder = entityDTOBuilder.DisplayName(dispName)
 				entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_TRANSACTION, "").Capacity(10).Used(0)
-				entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_CONTAINER, podName)
-				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, "Application", cpuUsage)
-				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, "Application", memUsage)
+				entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_CONTAINER_POD, podName)
+				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, podName, cpuUsage)
+				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, podName, memUsage)
 				entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, nodeName)
-				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VCPU, "Application", cpuUsage)
-				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VMEM, "Application", memUsage)
+				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VCPU, nodeName, cpuUsage)
+				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VMEM, nodeName, memUsage)
 
 				entityDto := entityDTOBuilder.Create()
 
 				appType := app.Cmd
-				ipAddress := ""
+				// ipAddress := ""
 				appData := &sdk.EntityDTO_ApplicationData{
-					Type:      &appType,
-					IpAddress: &ipAddress,
+					Type: &appType,
+					// IpAddress: &ipAddress,
 				}
 				entityDto.ApplicationData = appData
 				result = append(result, entityDto)

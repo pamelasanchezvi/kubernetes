@@ -174,7 +174,7 @@ func (vmtApi *VmtApi) apiPost(postUrl, requestDataString string) (*http.Response
 	}
 
 	respContent, _ := vmtApi.parsePostResponse(resp)
-	glog.V(3).Info("Post Succeed: %s", string(respContent))
+	glog.V(3).Infof("Post Succeed: %s", string(respContent))
 
 	defer resp.Body.Close()
 	return resp, nil
