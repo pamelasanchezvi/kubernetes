@@ -4,7 +4,7 @@ const (
 	// Appliance address.
 	// SERVER_ADDRESS string = "10.10.173.193:80"
 
-	SERVER_ADDRESS string = "10.10.192.137:8080"
+	SERVER_ADDRESS string = "10.10.192.78:8080"
 
 	// SERVER_ADDRESS string = "172.31.253.119:8080"
 

@@ -5,6 +5,7 @@ import (
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client"
+	"k8s.io/kubernetes/pkg/labels"
 
 	vmtapi "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/api"
 	vmtmeta "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
@@ -105,9 +106,16 @@ func (handler *KubernetesServerMessageHandler) DiscoverTopology(serverMsg *comm.
 		return
 	}
 
+	serviceEntityDtos, err := kubeProbe.ParseService(api.NamespaceAll, labels.Everything())
+	if err != nil {
+		// TODO, should here still send out msg to server? Or set errorDTO?
+		return
+	}
+
 	entityDtos := nodeEntityDtos
 	entityDtos = append(entityDtos, podEntityDtos...)
 	entityDtos = append(entityDtos, appEntityDtos...)
+	entityDtos = append(entityDtos, serviceEntityDtos...)
 	discoveryResponse := &comm.DiscoveryResponse{
 		EntityDTO: entityDtos,
 	}
@@ -307,8 +315,23 @@ func createSupplyChain() []*sdk.TemplateDTO {
 	}
 	appSupplyChainNodeBuilder = appSupplyChainNodeBuilder.Provider(sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_HOSTING).Buys(*appVCpu).Buys(*appVMem)
 
+	// Application supplychain builder
+	vAppSupplyChainNodeBuilder := sdk.NewSupplyChainNodeBuilder()
+	vAppSupplyChainNodeBuilder = vAppSupplyChainNodeBuilder.
+		Entity(sdk.EntityDTO_VIRTUAL_APPLICATION)
+
+	transactionType := sdk.CommodityDTO_TRANSACTION
+
+	// Buys CpuAllocation/MemAllocation from Pod
+	transactionTemplateComm := &sdk.TemplateCommodity{
+		Key:           &emptyKey,
+		CommodityType: &transactionType,
+	}
+	vAppSupplyChainNodeBuilder = vAppSupplyChainNodeBuilder.Provider(sdk.EntityDTO_APPLICATION, sdk.Provider_LAYERED_OVER).Buys(*transactionTemplateComm)
+
 	supplyChainBuilder := sdk.NewSupplyChainBuilder()
-	supplyChainBuilder.Top(appSupplyChainNodeBuilder)
+	supplyChainBuilder.Top(vAppSupplyChainNodeBuilder)
+	supplyChainBuilder.Entity(appSupplyChainNodeBuilder)
 	supplyChainBuilder.Entity(podSupplyChainNodeBuilder)
 	supplyChainBuilder.Entity(minionSupplyChainNodeBuilder)
 
