@@ -2,6 +2,7 @@ package vmturbo
 
 import (
 	"fmt"
+	"strings"
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/util"
@@ -18,16 +19,16 @@ import (
 )
 
 type VMTurboService struct {
-	config           *Config
-	vmtcomm          *vmt.VMTCommunicator
-	scheduleDestChan chan *api.VMTEvent
+	config       *Config
+	vmtcomm      *vmt.VMTCommunicator
+	vmtEventChan chan *api.VMTEvent
 }
 
 func NewVMTurboService(c *Config) *VMTurboService {
 	vmtService := &VMTurboService{
 		config: c,
 	}
-	vmtService.scheduleDestChan = make(chan *api.VMTEvent)
+	vmtService.vmtEventChan = make(chan *api.VMTEvent)
 	return vmtService
 }
 
@@ -57,10 +58,10 @@ func (v *VMTurboService) Run() {
 func (v *VMTurboService) getNextVMTEvent() {
 	event := v.config.VMTEventQueue.Pop().(*api.VMTEvent)
 	glog.V(2).Infof("Get a new Event %v", event.ActionType)
-	if event.ActionType == "move" {
-		glog.V(2).Infof("Send Destination to channel.")
+	if event.ActionType == "move" || event.ActionType == "provision" {
+		glog.V(2).Infof("Get a valid vmtevent from etcd.")
 
-		v.scheduleDestChan <- event
+		v.vmtEventChan <- event
 	}
 }
 
@@ -86,21 +87,34 @@ func (v *VMTurboService) getNextPod() {
 
 	// ----------------- try channel and vmtevent -------------
 	select {
-	case vmtEventFromEtcd := <-v.scheduleDestChan:
-		glog.V(3).Infof("Schedule destination from etcd is %s.", vmtEventFromEtcd.Destination)
-		glog.V(2).Infof("Move Pod %v to %s", pod.Name, vmtEventFromEtcd.Destination)
+	case vmtEventFromEtcd := <-v.vmtEventChan:
+		if vmtEventFromEtcd.ActionType == "move" {
+			glog.V(3).Infof("Schedule destination from etcd is %s.", vmtEventFromEtcd.Destination)
+			glog.V(2).Infof("Move Pod %v to %s", pod.Name, vmtEventFromEtcd.Destination)
 
-		vmtScheduler.VMTSchedule(pod, vmtEventFromEtcd.Destination)
+			vmtScheduler.VMTSchedule(pod, vmtEventFromEtcd.Destination)
+		} else if vmtEventFromEtcd.ActionType == "provision" {
+			glog.V(3).Infof("Change replicas of %s.", vmtEventFromEtcd.TargetSE)
+
+			// double check if the pod is created as the result of provision
+			hasPrefix := strings.HasPrefix(pod.Name, vmtEventFromEtcd.TargetSE)
+			if !hasPrefix {
+				break
+			}
+			v.schedule(pod)
+		}
 		// TODO, at this point, we really do not know if the assignment of the pod succeeds or not.
 		// The right place of sending move reponse is after the event.
 		// Here for test purpose, send the move success action response.
 		if vmtEventFromEtcd.VMTMessageID > -1 {
 			glog.V(3).Infof("Get vmtevent %v", vmtEventFromEtcd)
 			glog.V(3).Infof("Send action response")
-			v.vmtcomm.SendActionReponse(sdk.ActionResponseState_SUCCEEDED, 100, int32(vmtEventFromEtcd.VMTMessageID), "Success")
+			progress := int32(100)
+			v.vmtcomm.SendActionReponse(sdk.ActionResponseState_SUCCEEDED, progress, int32(vmtEventFromEtcd.VMTMessageID), "Success")
 		}
 		v.vmtcomm.DiscoverTarget()
 		return
+
 	default:
 		glog.V(3).Infof("Nothing from etcd. Try to use simulator.")
 		// This if block is for test move action only.
@@ -121,8 +135,11 @@ func (v *VMTurboService) getNextPod() {
 			return
 		}
 	}
+	v.schedule(pod)
+}
 
-	placementMap, err := v.getDestinationFromVmturbo(pod)
+func (vmtService *VMTurboService) schedule(pod *api.Pod) {
+	placementMap, err := vmtService.getDestinationFromVmturbo(pod)
 	if err != nil {
 		glog.Errorf("error: ", err)
 	}

@@ -95,14 +95,12 @@ func getNameOfMovedPod(base string) (name string) {
 		glog.Errorf("Error reading in %s: %s", filePath, err)
 		return ""
 	}
-	glog.V(3).Infof("$$$$$$$$$$$$$$$$ entry read in is %s $$$$$$$$$$$$$$$$$$$$$\n", string(entry))
 
 	content := strings.Split(string(entry), "\t")
 	if len(content) < 4 {
 		return ""
 	}
 	podName := content[1]
-	glog.V(3).Infof("$$$$$$$$$$$$$$$$ podName is %s $$$$$$$$$$$$$$$$$$$$$\n", podName)
 
 	podNameContent := strings.Split(podName, base)
 	if len(podNameContent) < 2 {

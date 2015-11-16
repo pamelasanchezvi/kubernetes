@@ -48,6 +48,38 @@ func (kae *KubernetesActionExecutor) ExcuteAction(actionItem *sdk.ActionItemDTO,
 			glog.V(3).Infof("Now Moving Pod %s in namespace %s.", podName, podNamespace)
 			kae.MovePod(podName, podNamespace, nodeIdentifier, msgID)
 		}
+	} else if actionItem.GetActionType() == sdk.ActionItemDTO_PROVISION {
+		glog.V(3).Infof("Now Provision Pods")
+		if actionItem.GetTargetSE().GetEntityType() == sdk.EntityDTO_CONTAINER_POD {
+			targetPod := actionItem.GetTargetSE()
+			podIdentifier := targetPod.GetId()
+
+			// find related replication controller through identifier.
+			podIds := strings.Split(string(podIdentifier), "/")
+			if len(podIds) != 2 {
+				return fmt.Errorf("Not a valid pod identifier: %s", podIdentifier)
+			}
+
+			podNamespace := podIds[0]
+			podNames := strings.Split(string(podIds[1]), "-")
+			if len(podNames) != 2 {
+				return fmt.Errorf("Cannot parse pod with name: %s", podIds[1])
+			}
+			replicationControllerName := podNames[0]
+			targetReplicationController, err := kae.getReplicationController(replicationControllerName, podNamespace)
+			if err != nil {
+				return fmt.Errorf("Error getting replication controller related to pod %s: %s", podIdentifier, err)
+			}
+			if &targetReplicationController == nil {
+				return fmt.Errorf("No replication controller defined with pod %s", podIdentifier)
+			}
+			currentReplica := targetReplicationController.Spec.Replicas
+			err = kae.ProvisionPods(targetReplicationController, currentReplica+1, msgID)
+			if err != nil {
+				return fmt.Errorf("Error provision pod %s: %s", podIdentifier, err)
+			}
+		}
+
 	}
 
 	return nil
@@ -109,33 +141,62 @@ func (this *KubernetesActionExecutor) MovePod(podIdentifier, namespace, targetNo
 
 // TODO. Thoughts. This is used to scale up and down. So we need the pod namespace and label here.
 func (this *KubernetesActionExecutor) UpdateReplicas(podLabel, namespace string, newReplicas int) (err error) {
-	replicationControllers, err := this.GetAllRC(namespace)
+	targetRC, err := this.getReplicationController(podLabel, namespace)
 	if err != nil {
-		return
-	}
-	if len(replicationControllers) < 1 {
-		return
-	}
-	var targetRC api.ReplicationController
-	for _, rc := range replicationControllers {
-		labels := rc.Labels
-		if labelName, ok := labels["name"]; ok && labelName == podLabel {
-			targetRC = rc
-		}
+		return fmt.Errorf("Error getting replication controller: %s", err)
 	}
 	if &targetRC == nil {
 		// TODO. Not sure here need error or just a warning.
 		glog.Warning("This pod is not managed by any replication controllers")
 		return fmt.Errorf("This pod is not managed by any replication controllers")
 	}
-	targetRC.Spec.Replicas = newReplicas
+	err = this.ProvisionPods(targetRC, newReplicas, -1)
+	return err
+}
 
+// Update replica of the target replication controller.
+func (this *KubernetesActionExecutor) ProvisionPods(targetReplicationController api.ReplicationController, newReplicas int, msgID int32) (err error) {
+	targetReplicationController.Spec.Replicas = newReplicas
+	namespace := targetReplicationController.Namespace
 	kubeClient := this.kubeClient
-	newRC, err := kubeClient.ReplicationControllers(namespace).Update(&targetRC)
+	newRC, err := kubeClient.ReplicationControllers(namespace).Update(&targetReplicationController)
 	if err != nil {
-		glog.V(3).Infof("New replicas of %s is %d", newRC.Name, newRC.Spec.Replicas)
+		return fmt.Errorf("Error updating replication controller %s: %s", targetReplicationController.Name, err)
+	}
+	glog.V(3).Infof("New replicas of %s is %d", newRC.Name, newRC.Spec.Replicas)
+
+	if msgID < 0 {
+		return
+	}
+
+	action := "provision"
+	vmtEvents := registry.NewVMTEvents(this.kubeClient, "")
+	event := registry.GenerateVMTEvent(action, namespace, newRC.Name, "not specified", int(msgID))
+	glog.V(3).Infof("vmt event is %v, msgId is %d, %d", event, msgID, int(msgID))
+	_, errorPost := vmtEvents.Create(event)
+	if errorPost != nil {
+		glog.Errorf("Error posting vmtevent: %s\n", errorPost)
 	}
 	return
+}
+
+// Get the replication controller instance according to the name and namespace.
+func (this *KubernetesActionExecutor) getReplicationController(rcName, namespace string) (api.ReplicationController, error) {
+	var targetRC api.ReplicationController
+
+	replicationControllers, err := this.GetAllRC(namespace)
+	if err != nil {
+		return targetRC, err
+	}
+	if len(replicationControllers) < 1 {
+		return targetRC, fmt.Errorf("There is no replication controller defined in current cluster")
+	}
+	for _, rc := range replicationControllers {
+		if rcName == rc.Name {
+			targetRC = rc
+		}
+	}
+	return targetRC, nil
 }
 
 // Get all replication controllers defined in the specified namespace.
