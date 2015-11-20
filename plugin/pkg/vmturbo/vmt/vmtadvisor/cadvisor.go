@@ -1,4 +1,4 @@
-package vmt
+package vmtadvisor
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 type CadvisorSource struct{}
 
 // Construct a container from containerInfo to the Container type defined in types.
-func (self *CadvisorSource) parseStat(containerInfo *cadvisor.ContainerInfo) *Container {
+func (self *CadvisorSource) parseContainerStat(containerInfo *cadvisor.ContainerInfo) *Container {
 	container := &Container{
 		Name:    containerInfo.Name,
 		Aliases: containerInfo.Aliases,
@@ -35,7 +35,7 @@ func (self *CadvisorSource) getAllContainers(client *cadvisorClient.Client, star
 	}
 
 	for _, containerInfo := range allContainers {
-		container := self.parseStat(&containerInfo)
+		container := self.parseContainerStat(&containerInfo)
 		if containerInfo.Name == "/" {
 			root = container
 		} else {
@@ -47,7 +47,7 @@ func (self *CadvisorSource) getAllContainers(client *cadvisorClient.Client, star
 }
 
 // Get all the containers in specified host.
-func (self *CadvisorSource) GetAllContainers(host Host, start, end time.Time) (subcontainers []*Container, root *Container, err error) {
+func (self *CadvisorSource) GetAllContainers(host *Host, start, end time.Time) (subcontainers []*Container, root *Container, err error) {
 	url := fmt.Sprintf("http://%s:%d/", host.IP, host.Port)
 	client, err := cadvisorClient.NewClient(url)
 	if err != nil {
@@ -61,7 +61,7 @@ func (self *CadvisorSource) GetAllContainers(host Host, start, end time.Time) (s
 }
 
 // Get node information from cAdvisor.
-func (self *CadvisorSource) GetMachineInfo(host Host) (machineInfo *cadvisor.MachineInfo, err error) {
+func (self *CadvisorSource) GetMachineInfo(host *Host) (machineInfo *cadvisor.MachineInfo, err error) {
 	url := fmt.Sprintf("http://%s:%d/", host.IP, host.Port)
 	client, err := cadvisorClient.NewClient(url)
 	if err != nil {

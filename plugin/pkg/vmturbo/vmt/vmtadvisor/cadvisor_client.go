@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Client library to programmatically access cAdvisor API.
-package vmt
+package vmtadvisor
 
 import (
 	"bytes"
