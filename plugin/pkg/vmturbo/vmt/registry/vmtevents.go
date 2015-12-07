@@ -29,11 +29,11 @@ func NewVMTEvents(c *client.Client, ns string) *vmtevents {
 
 // Create makes a new vmtevent. Returns the copy of the vmtevent the server returns,
 // or an error.
-func (e *vmtevents) Create(event *api.VMTEvent) (*api.VMTEvent, error) {
+func (e *vmtevents) Create(event *VMTEvent) (*VMTEvent, error) {
 	if e.namespace != "" && event.Namespace != e.namespace {
 		return nil, fmt.Errorf("can't create an event with namespace '%v' in namespace '%v'", event.Namespace, e.namespace)
 	}
-	result := &api.VMTEvent{}
+	result := &VMTEvent{}
 	err := e.client.Post().
 		NamespaceIfScoped(event.Namespace, len(event.Namespace) > 0).
 		Resource("vmtevents").
@@ -44,8 +44,8 @@ func (e *vmtevents) Create(event *api.VMTEvent) (*api.VMTEvent, error) {
 }
 
 // Get returns the given event, or an error.
-func (e *vmtevents) Get(name string) (*api.VMTEvent, error) {
-	result := &api.VMTEvent{}
+func (e *vmtevents) Get(name string) (*VMTEvent, error) {
+	result := &VMTEvent{}
 	err := e.client.Get().
 		NamespaceIfScoped(e.namespace, len(e.namespace) > 0).
 		Resource("vmtevents").
@@ -56,8 +56,8 @@ func (e *vmtevents) Get(name string) (*api.VMTEvent, error) {
 }
 
 // List returns a list of events matching the selectors.
-func (e *vmtevents) List() (*api.VMTEventList, error) {
-	result := &api.VMTEventList{}
+func (e *vmtevents) List() (*VMTEventList, error) {
+	result := &VMTEventList{}
 	err := e.client.Get().
 		NamespaceIfScoped(e.namespace, len(e.namespace) > 0).
 		Resource("vmtevents").
@@ -107,7 +107,7 @@ func (e *vmtevents) DeleteAll() error {
 }
 
 // Build a new VMTEvent.
-func GenerateVMTEvent(actionType, namespace, targetSE, destination string, messageId int) *api.VMTEvent {
+func GenerateVMTEvent(actionType, namespace, targetSE, destination string, messageId int) *VMTEvent {
 
 	event := makeVMTEvent(actionType, namespace, targetSE, destination, messageId)
 	// event.Source = recorder.source
@@ -116,13 +116,13 @@ func GenerateVMTEvent(actionType, namespace, targetSE, destination string, messa
 }
 
 // Make a new VMTEvent instance.
-func makeVMTEvent(actionType, namespace, targetSE, destination string, messageId int) *api.VMTEvent {
+func makeVMTEvent(actionType, namespace, targetSE, destination string, messageId int) *VMTEvent {
 	t := util.Now()
 	if namespace == "" {
 		namespace = api.NamespaceDefault
 	}
-	return &api.VMTEvent{
-		ObjectMeta: api.ObjectMeta{
+	return &VMTEvent{
+		ObjectMeta: ObjectMeta{
 			Name:      fmt.Sprintf("%v.%x", targetSE, t.UnixNano()),
 			Namespace: namespace,
 		},
