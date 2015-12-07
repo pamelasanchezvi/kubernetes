@@ -2,17 +2,6 @@
 // source: CommonDTO.proto
 // DO NOT EDIT!
 
-/*
-Package common_dto is a generated protocol buffer package.
-
-It is generated from these files:
-	CommonDTO.proto
-
-It has these top-level messages:
-	EntityDTO
-	CommodityDTO
-	GroupDTO
-*/
 package sdk
 
 import proto "github.com/golang/protobuf/proto"

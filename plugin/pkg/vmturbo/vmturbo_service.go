@@ -21,14 +21,14 @@ import (
 type VMTurboService struct {
 	config       *Config
 	vmtcomm      *vmt.VMTCommunicator
-	vmtEventChan chan *api.VMTEvent
+	vmtEventChan chan *registry.VMTEvent
 }
 
 func NewVMTurboService(c *Config) *VMTurboService {
 	vmtService := &VMTurboService{
 		config: c,
 	}
-	vmtService.vmtEventChan = make(chan *api.VMTEvent)
+	vmtService.vmtEventChan = make(chan *registry.VMTEvent)
 	return vmtService
 }
 
@@ -36,13 +36,13 @@ func NewVMTurboService(c *Config) *VMTurboService {
 func (v *VMTurboService) Run() {
 	glog.V(3).Infof("********** Start runnning VMT service **********")
 
-	vmtCommunicator := vmt.NewVMTCommunicator(v.config.Client, v.config.Meta)
+	vmtCommunicator := vmt.NewVMTCommunicator(v.config.Client, v.config.Meta, v.config.EtcdStorage)
 	v.vmtcomm = vmtCommunicator
 	// register and validates to vmturbo server
 	go vmtCommunicator.Run()
 
 	//delete all the vmt events
-	vmtEvents := registry.NewVMTEvents(v.config.Client, "")
+	vmtEvents := registry.NewVMTEvents(v.config.Client, "", v.config.EtcdStorage)
 	errorDelete := vmtEvents.DeleteAll()
 	if errorDelete != nil {
 		glog.V(3).Infof("Error deleting all vmt events: %s", errorDelete)
@@ -56,7 +56,7 @@ func (v *VMTurboService) Run() {
 
 // When new node added in, this function is called. Otherwise, it is blocked.
 func (v *VMTurboService) getNextVMTEvent() {
-	event := v.config.VMTEventQueue.Pop().(*api.VMTEvent)
+	event := v.config.VMTEventQueue.Pop().(*registry.VMTEvent)
 	glog.V(2).Infof("Get a new Event %v", event.ActionType)
 	if event.ActionType == "move" || event.ActionType == "provision" {
 		glog.V(2).Infof("Get a valid vmtevent from etcd.")
@@ -78,11 +78,18 @@ func (v *VMTurboService) getNextPod() {
 	glog.V(2).Infof("Get a new Pod %v", pod.Name)
 
 	// for test vmtevents etcd registry
-	vmtEvents := registry.NewVMTEvents(v.config.Client, "")
+	vmtEvents := registry.NewVMTEvents(v.config.Client, "", v.config.EtcdStorage)
 	event := registry.GenerateVMTEvent("create", pod.Namespace, pod.Name, "1.0.0.0", 1)
 	_, errorPost := vmtEvents.Create(event)
 	if errorPost != nil {
 		glog.Errorf("Error posting vmtevent: %s\n", errorPost)
+	}
+
+	getEvent, err := vmtEvents.Get()
+	if err != nil {
+		glog.Errorf("Error is %s", err)
+	} else {
+		glog.Infof("Get %+v", getEvent)
 	}
 
 	// ----------------- try channel and vmtevent -------------

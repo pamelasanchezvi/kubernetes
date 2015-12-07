@@ -151,11 +151,11 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		replacementEntityMetaDataBuilder.Matching(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS)
 		replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_CPU_ALLOCATION)
 		replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_MEM_ALLOCATION)
-
 		replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_VCPU)
 		replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_VMEM)
 		// replacementEntityMetaDataBuilder.PatchBuying(sdk.CommodityDTO_VCPU)
 		// replacementEntityMetaDataBuilder.PatchBuying(sdk.CommodityDTO_VMEM)
+
 		metaData := replacementEntityMetaDataBuilder.Build()
 
 		entityDTOBuilder = entityDTOBuilder.ReplacedBy(metaData)
@@ -389,6 +389,7 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 		entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, providerUid)
 		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, "Container", podCpuCapacity)
 		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, "Container", podMemCapacity)
+		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 
 		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 		tmp := minionId
@@ -512,6 +513,7 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 				entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, providerUid)
 				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VCPU, providerUid, cpuUsage)
 				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VMEM, providerUid, memUsage)
+
 				// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 
 				entityDto := entityDTOBuilder.Create()

@@ -5,15 +5,18 @@ import (
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/storage"
 
 	vmtcache "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/cache"
 	vmtmeta "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/registry"
 )
 
 // Meta stores VMT Metadata.
 type Config struct {
 	Client        *client.Client
 	Meta          *vmtmeta.VMTMeta
+	EtcdStorage   storage.Interface
 	NodeQueue     *vmtcache.HashedFIFO
 	PodQueue      *vmtcache.HashedFIFO
 	VMTEventQueue *vmtcache.HashedFIFO
@@ -40,7 +43,7 @@ func NewVMTConfig(client *client.Client, meta *vmtmeta.VMTMeta) *Config {
 	cache.NewReflector(config.createUnassignedPodLW(), &api.Pod{}, config.PodQueue, 0).RunUntil(config.StopEverything)
 
 	// monitor vmtevents
-	cache.NewReflector(config.createVMTEventLW(), &api.VMTEvent{}, config.VMTEventQueue, 0).RunUntil(config.StopEverything)
+	cache.NewReflector(config.createVMTEventLW(), &registry.VMTEvent{}, config.VMTEventQueue, 0).RunUntil(config.StopEverything)
 
 	return config
 }

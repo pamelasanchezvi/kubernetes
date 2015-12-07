@@ -71,7 +71,6 @@ import (
 	serviceetcd "k8s.io/kubernetes/pkg/registry/service/etcd"
 	ipallocator "k8s.io/kubernetes/pkg/registry/service/ipallocator"
 	serviceaccountetcd "k8s.io/kubernetes/pkg/registry/serviceaccount/etcd"
-	vmteventetcd "k8s.io/kubernetes/pkg/registry/vmtevent/etcd"
 	"k8s.io/kubernetes/pkg/storage"
 	etcdstorage "k8s.io/kubernetes/pkg/storage/etcd"
 	"k8s.io/kubernetes/pkg/tools"
@@ -436,7 +435,6 @@ func (m *Master) init(c *Config) {
 	podTemplateStorage := podtemplateetcd.NewREST(c.DatabaseStorage)
 
 	eventStorage := eventetcd.NewStorage(c.DatabaseStorage, uint64(c.EventTTL.Seconds()))
-	vmtEventStorage := vmteventetcd.NewStorage(c.DatabaseStorage, uint64(c.EventTTL.Seconds()))
 
 	limitRangeStorage := limitrangeetcd.NewStorage(c.DatabaseStorage)
 
@@ -498,8 +496,6 @@ func (m *Master) init(c *Config) {
 		"nodes":                  nodeStorage,
 		"nodes/status":           nodeStatusStorage,
 		"events":                 eventStorage,
-
-		"vmtevents": vmtEventStorage,
 
 		"limitRanges":                   limitRangeStorage,
 		"resourceQuotas":                resourceQuotaStorage,

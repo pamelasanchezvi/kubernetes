@@ -18,31 +18,43 @@ limitations under the License.
 package app
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
+	"net/http"
 
+	"k8s.io/kubernetes/pkg/api/latest"
+	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/client/clientcmd"
 	clientcmdapi "k8s.io/kubernetes/pkg/client/clientcmd/api"
+	"k8s.io/kubernetes/pkg/master"
+	"k8s.io/kubernetes/pkg/storage"
+	"k8s.io/kubernetes/pkg/tools"
 	// "k8s.io/kubernetes/pkg/healthz"
 	"k8s.io/kubernetes/pkg/master/ports"
 	// "k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
+	forked "k8s.io/kubernetes/third_party/forked/coreos/go-etcd/etcd"
 
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 )
 
 // VMTServer has all the context and params needed to run a Scheduler
 type VMTServer struct {
-	Port          int
-	Address       net.IP
-	Master        string
-	Server        string
-	Kubeconfig    string
-	BindPodsQPS   float32
-	BindPodsBurst int
+	Port           int
+	Address        net.IP
+	Master         string
+	Server         string
+	Kubeconfig     string
+	BindPodsQPS    float32
+	BindPodsBurst  int
+	EtcdServerList []string
+	EtcdConfigFile string
+	EtcdPathPrefix string
 }
 
 // NewVMTServer creates a new VMTServer with default parameters
@@ -59,6 +71,7 @@ func (s *VMTServer) AddFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&s.Port, "port", s.Port, "The port that the scheduler's http service runs on")
 	fs.StringVar(&s.Master, "master", s.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig)")
 	fs.StringVar(&s.Server, "server", s.Server, "The address of the vmt server.")
+	fs.StringSliceVar(&s.EtcdServerList, "etcd-servers", s.EtcdServerList, "List of etcd servers to watch (http://ip:port), comma separated. Mutually exclusive with -etcd-config")
 	fs.StringVar(&s.Kubeconfig, "kubeconfig", s.Kubeconfig, "Path to kubeconfig file with authorization and master location information.")
 }
 
@@ -71,6 +84,10 @@ func (s *VMTServer) Run(_ []string) error {
 
 	if s.Server == "" {
 		glog.Warningf("VMT Server Address is not provided. Use the default value.")
+	}
+
+	if (s.EtcdConfigFile != "" && len(s.EtcdServerList) != 0) || (s.EtcdConfigFile == "" && len(s.EtcdServerList) == 0) {
+		glog.Fatalf("specify either --etcd-servers or --etcd-config")
 	}
 
 	// This creates a client, first loading any specified kubeconfig
@@ -113,9 +130,44 @@ func (s *VMTServer) Run(_ []string) error {
 	glog.V(3).Infof("The vmt server address is %s", vmtMeta.ServerAddress)
 
 	vmtConfig := vmturbo.NewVMTConfig(kubeClient, vmtMeta)
+
+	s.EtcdPathPrefix = master.DefaultEtcdPathPrefix
+	etcdStorage, err := newEtcd(s.EtcdConfigFile, s.EtcdServerList, latest.InterfacesFor, latest.Version, "", s.EtcdPathPrefix)
+	if err != nil {
+		glog.Warningf("Error creating etcd storage instance for vmt service: %s", err)
+	} else {
+		vmtConfig.EtcdStorage = etcdStorage
+	}
+
 	vmtService := vmturbo.NewVMTurboService(vmtConfig)
 
 	vmtService.Run()
 
 	select {}
+}
+
+func newEtcd(etcdConfigFile string, etcdServerList []string, interfacesFunc meta.VersionInterfacesFunc, defaultVersion, storageVersion, pathPrefix string) (etcdStorage storage.Interface, err error) {
+	var client tools.EtcdClient
+	if etcdConfigFile != "" {
+		client, err = etcd.NewClientFromFile(etcdConfigFile)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		etcdClient := etcd.NewClient(etcdServerList)
+		transport := &http.Transport{
+			Dial: forked.Dial,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+			MaxIdleConnsPerHost: 500,
+		}
+		etcdClient.SetTransport(transport)
+		client = etcdClient
+	}
+
+	if storageVersion == "" {
+		storageVersion = defaultVersion
+	}
+	return master.NewEtcdStorage(client, interfacesFunc, storageVersion, pathPrefix)
 }
