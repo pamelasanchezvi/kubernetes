@@ -7,11 +7,11 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/vmturbo/vmturbo-go-sdk/sdk",
-			"Rev": "fee25a05471d22052da07e1c142ae1647d02e7ea"
+			"Rev": "94c306c457909b1103bcd1393819ee0b3721c26f"
 		},
 		{
 			"ImportPath": "github.com/vmturbo/vmturbo-go-sdk/communicator",
-			"Rev": "fee25a05471d22052da07e1c142ae1647d02e7ea"
+			"Rev": "94c306c457909b1103bcd1393819ee0b3721c26f"
 		},
 		{
 			"ImportPath": "bitbucket.org/bertimus9/systemstat",

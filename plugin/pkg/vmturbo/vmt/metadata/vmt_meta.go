@@ -6,7 +6,9 @@ const (
 
 	SERVER_ADDRESS string = "10.10.192.78:8080"
 
-	// SERVER_ADDRESS string = "172.31.253.119:8080"
+	// SERVER_ADDRESS string = "10.10.200.114:8080"
+
+	// SERVER_ADDRESS string = "172.31.94.98:8080"
 
 	TARGET_TYPE string = "Kubernetes"
 

@@ -213,38 +213,38 @@ func (vmtcomm *VMTCommunicator) RegisterKubernetes() {
 // create account definition for kubernetes, which is used later to create Kubernetes probe.
 // The return type is a list of ProbeInfo_AccountDefProp.
 // For a valid definition, targetNameIdentifier, username and password should be contained.
-func createAccountDefKubernetes() []*comm.ProbeInfo_AccountDefProp {
-	var acctDefProps []*comm.ProbeInfo_AccountDefProp
+func createAccountDefKubernetes() []*comm.AccountDefEntry {
+	var acctDefProps []*comm.AccountDefEntry
 
 	// target id
 	targetIDAcctDefEntry := comm.NewAccountDefEntryBuilder("targetIdentifier", "Address",
 		"IP of the kubernetes master", ".*", comm.AccountDefEntry_OPTIONAL, false).Create()
-	targetIdEntryKey := "targetIdentifier"
-	targetIdAcctDefProp := &comm.ProbeInfo_AccountDefProp{
-		Key:   &targetIdEntryKey,
-		Value: targetIDAcctDefEntry,
-	}
-	acctDefProps = append(acctDefProps, targetIdAcctDefProp)
+	// targetIdEntryKey := "targetIdentifier"
+	// targetIdAcctDefProp := &comm.AccountDefEntry{
+	// 	Key:   &targetIdEntryKey,
+	// 	Value: targetIDAcctDefEntry,
+	// }
+	acctDefProps = append(acctDefProps, targetIDAcctDefEntry)
 
 	// username
 	usernameAcctDefEntry := comm.NewAccountDefEntryBuilder("username", "Username",
 		"Username of the kubernetes master", ".*", comm.AccountDefEntry_OPTIONAL, false).Create()
-	usernameEntryKey := "username"
-	usernameAcctDefProp := &comm.ProbeInfo_AccountDefProp{
-		Key:   &usernameEntryKey,
-		Value: usernameAcctDefEntry,
-	}
-	acctDefProps = append(acctDefProps, usernameAcctDefProp)
+	// usernameEntryKey := "username"
+	// usernameAcctDefProp := &comm.AccountDefEntry{
+	// 	Key:   &usernameEntryKey,
+	// 	Value: usernameAcctDefEntry,
+	// }
+	acctDefProps = append(acctDefProps, usernameAcctDefEntry)
 
 	// password
 	passwdAcctDefEntry := comm.NewAccountDefEntryBuilder("password", "Password",
 		"Password of the kubernetes master", ".*", comm.AccountDefEntry_OPTIONAL, true).Create()
-	passwdEntryKey := "password"
-	passwdAcctDefProp := &comm.ProbeInfo_AccountDefProp{
-		Key:   &passwdEntryKey,
-		Value: passwdAcctDefEntry,
-	}
-	acctDefProps = append(acctDefProps, passwdAcctDefProp)
+	// passwdEntryKey := "password"
+	// passwdAcctDefProp := &comm.AccountDefEntry{
+	// 	Key:   &passwdEntryKey,
+	// 	Value: passwdAcctDefEntry,
+	// }
+	acctDefProps = append(acctDefProps, passwdAcctDefEntry)
 
 	return acctDefProps
 }
@@ -329,10 +329,32 @@ func createSupplyChain() []*sdk.TemplateDTO {
 	}
 	vAppSupplyChainNodeBuilder = vAppSupplyChainNodeBuilder.Provider(sdk.EntityDTO_APPLICATION, sdk.Provider_LAYERED_OVER).Buys(*transactionTemplateComm)
 
+	// Link from Pod to VM
+	vmPodExtLinkBuilder := sdk.NewExternalEntityLinkBuilder()
+	vmPodExtLinkBuilder.Link(sdk.EntityDTO_CONTAINER_POD, sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_LAYERED_OVER).
+		Commodity(cpuAllocationType).
+		Commodity(memAllocationType).
+		ProbeEntityPropertyDef(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS, "IP Address where the Pod is running").
+		ExternalEntityPropertyDef(sdk.VM_IP)
+
+	vmPodExternalLink := vmPodExtLinkBuilder.Build()
+
+	// Link from Application to VM
+	vmAppExtLinkBuilder := sdk.NewExternalEntityLinkBuilder()
+	vmAppExtLinkBuilder.Link(sdk.EntityDTO_APPLICATION, sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_HOSTING).
+		Commodity(vCpuType).
+		Commodity(vMemType).
+		ProbeEntityPropertyDef(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS, "IP Address where the Application is running").
+		ExternalEntityPropertyDef(sdk.VM_IP)
+
+	vmAppExternalLink := vmAppExtLinkBuilder.Build()
+
 	supplyChainBuilder := sdk.NewSupplyChainBuilder()
 	supplyChainBuilder.Top(vAppSupplyChainNodeBuilder)
 	supplyChainBuilder.Entity(appSupplyChainNodeBuilder)
+	supplyChainBuilder.ConnectsTo(vmAppExternalLink)
 	supplyChainBuilder.Entity(podSupplyChainNodeBuilder)
+	supplyChainBuilder.ConnectsTo(vmPodExternalLink)
 	supplyChainBuilder.Entity(minionSupplyChainNodeBuilder)
 
 	return supplyChainBuilder.Create()
