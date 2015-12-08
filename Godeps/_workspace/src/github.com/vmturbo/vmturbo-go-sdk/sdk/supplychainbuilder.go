@@ -1,5 +1,9 @@
 package sdk
 
+import (
+	"fmt"
+)
+
 type SupplyChainBuilder struct {
 	SupplyChainNodes map[*EntityDTO_EntityType]*SupplyChainNodeBuilder
 	currentNode      *SupplyChainNodeBuilder
@@ -60,3 +64,49 @@ func (scb *SupplyChainBuilder) hasTopNode() bool {
 	}
 	return true
 }
+
+// Adds an external entity link to the current node.
+// An external entity is on ethat exists in teh Operations Manager supply chain, but has not been
+// discovered by the probe. Operations Manager uses this link by the Operations Manager market. This
+// external entity can be a provider or a consumer.
+func (scb *SupplyChainBuilder) connectsTo(extEntityLink *ExternalEntityLink) *SupplyChainBuilder {
+	err := scb.requireCurrentNode()
+	if err != nil {
+		return scb
+	}
+
+	scb.currentNode = scb.currentNode.Link(extEntityLink)
+
+	return scb
+}
+
+// check if currentNode is set.
+func (scb *SupplyChainBuilder) requireCurrentNode() error {
+	if scb.currentNode == nil {
+		return fmt.Errorf("Illegal state, currentNode is nil")
+	}
+	return nil
+}
+
+/**
+ * Adds an external entity link to the current node. The link is represented by
+ * an {@link ExternalEntityLink} object.
+ * <p>
+ * An external entity is one that exists in the
+ * Operations Manager supply chain, but has not been discovered by the probe.
+ * Operations Manager uses this link to stitch the probe's discovered entities into the
+ * existing topology that's managed by the Operations Manager market. This external
+ * entity can be a provider or a consumer. The {@code ExternalEntityLink} object
+ * contains a full description of the relationship between the external entity and
+ * the discovered entity.
+ *
+ * @param link  An {@link ExternalEntityLink} object to represent the entity to link to
+ *
+ * @return      This {@code SupplyChainBuilder} object
+ * @throws      IllegalStateException if {@link #currentNode} is not set
+ */
+// public SupplyChainBuilder connectsTo(ExternalEntityLink link) {
+//     requireCurrentNode(link.getCommoditiesList().toString());
+//     currentNode = currentNode.link(link);
+//     return this;
+// }
