@@ -6,6 +6,7 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/storage"
 
 	vmtapi "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/api"
 	vmtmeta "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
@@ -18,9 +19,10 @@ import (
 
 // impletements sdk.ServerMessageHandler
 type KubernetesServerMessageHandler struct {
-	kubeClient *client.Client
-	meta       *vmtmeta.VMTMeta
-	wsComm     *comm.WebSocketCommunicator
+	kubeClient  *client.Client
+	meta        *vmtmeta.VMTMeta
+	wsComm      *comm.WebSocketCommunicator
+	etcdStorage storage.Interface
 }
 
 // Use the vmt restAPI to add a Kubernetes target.
@@ -135,21 +137,24 @@ func (handler *KubernetesServerMessageHandler) HandleAction(serverMsg *comm.Medi
 	actionItemDTO := actionRequest.GetActionItemDTO()
 	glog.V(3).Infof("The received ActionItemDTO is %v", actionItemDTO)
 	actionExecutor := &KubernetesActionExecutor{
-		kubeClient: handler.kubeClient,
+		kubeClient:  handler.kubeClient,
+		etcdStorage: handler.etcdStorage,
 	}
 	actionExecutor.ExcuteAction(actionItemDTO, messageID)
 }
 
 type VMTCommunicator struct {
-	kubeClient *client.Client
-	meta       *vmtmeta.VMTMeta
-	wsComm     *comm.WebSocketCommunicator
+	kubeClient  *client.Client
+	meta        *vmtmeta.VMTMeta
+	wsComm      *comm.WebSocketCommunicator
+	etcdStorage storage.Interface
 }
 
-func NewVMTCommunicator(client *client.Client, vmtMetadata *vmtmeta.VMTMeta) *VMTCommunicator {
+func NewVMTCommunicator(client *client.Client, vmtMetadata *vmtmeta.VMTMeta, storage storage.Interface) *VMTCommunicator {
 	return &VMTCommunicator{
-		kubeClient: client,
-		meta:       vmtMetadata,
+		kubeClient:  client,
+		meta:        vmtMetadata,
+		etcdStorage: storage,
 	}
 }
 
@@ -170,9 +175,10 @@ func (vmtcomm *VMTCommunicator) Init() {
 
 	// First create the message handler for kubernetes
 	kubeMsgHandler := &KubernetesServerMessageHandler{
-		kubeClient: vmtcomm.kubeClient,
-		meta:       vmtcomm.meta,
-		wsComm:     wsCommunicator,
+		kubeClient:  vmtcomm.kubeClient,
+		meta:        vmtcomm.meta,
+		wsComm:      wsCommunicator,
+		etcdStorage: vmtcomm.etcdStorage,
 	}
 	wsCommunicator.ServerMsgHandler = kubeMsgHandler
 	return

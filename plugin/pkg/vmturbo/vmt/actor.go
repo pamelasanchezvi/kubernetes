@@ -8,6 +8,7 @@ import (
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/storage"
 
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/registry"
 
@@ -18,7 +19,8 @@ import (
 
 // KubernetesActionExecutor is responsilbe for executing different kinds of action requested by vmt server.
 type KubernetesActionExecutor struct {
-	kubeClient *client.Client
+	kubeClient  *client.Client
+	etcdStorage storage.Interface
 }
 
 // Switch between different kinds of the action according to action request and call the actually corresponding
@@ -128,7 +130,7 @@ func (this *KubernetesActionExecutor) MovePod(podIdentifier, namespace, targetNo
 	//------------------------------------------------------------------------------
 	// The desired move scenario is using etcd.
 	// Here it first post action event onto etcd. Then other component watches etcd will get the move event.
-	vmtEvents := registry.NewVMTEvents(this.kubeClient, "")
+	vmtEvents := registry.NewVMTEvents(this.kubeClient, "", this.etcdStorage)
 	event := registry.GenerateVMTEvent(action, namespace, podIdentifier, targetNodeIdentifier, int(msgID))
 	glog.V(3).Infof("vmt event is %v, msgId is %d, %d", event, msgID, int(msgID))
 	_, errorPost := vmtEvents.Create(event)
@@ -170,7 +172,7 @@ func (this *KubernetesActionExecutor) ProvisionPods(targetReplicationController 
 	}
 
 	action := "provision"
-	vmtEvents := registry.NewVMTEvents(this.kubeClient, "")
+	vmtEvents := registry.NewVMTEvents(this.kubeClient, "", this.etcdStorage)
 	event := registry.GenerateVMTEvent(action, namespace, newRC.Name, "not specified", int(msgID))
 	glog.V(3).Infof("vmt event is %v, msgId is %d, %d", event, msgID, int(msgID))
 	_, errorPost := vmtEvents.Create(event)

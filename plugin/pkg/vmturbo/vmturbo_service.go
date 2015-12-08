@@ -36,13 +36,13 @@ func NewVMTurboService(c *Config) *VMTurboService {
 func (v *VMTurboService) Run() {
 	glog.V(3).Infof("********** Start runnning VMT service **********")
 
-	vmtCommunicator := vmt.NewVMTCommunicator(v.config.Client, v.config.Meta)
+	vmtCommunicator := vmt.NewVMTCommunicator(v.config.Client, v.config.Meta, v.config.EtcdStorage)
 	v.vmtcomm = vmtCommunicator
 	// register and validates to vmturbo server
 	go vmtCommunicator.Run()
 
 	//delete all the vmt events
-	vmtEvents := registry.NewVMTEvents(v.config.Client, "")
+	vmtEvents := registry.NewVMTEvents(v.config.Client, "", v.config.EtcdStorage)
 	errorDelete := vmtEvents.DeleteAll()
 	if errorDelete != nil {
 		glog.V(3).Infof("Error deleting all vmt events: %s", errorDelete)
@@ -78,11 +78,18 @@ func (v *VMTurboService) getNextPod() {
 	glog.V(2).Infof("Get a new Pod %v", pod.Name)
 
 	// for test vmtevents etcd registry
-	vmtEvents := registry.NewVMTEvents(v.config.Client, "")
+	vmtEvents := registry.NewVMTEvents(v.config.Client, "", v.config.EtcdStorage)
 	event := registry.GenerateVMTEvent("create", pod.Namespace, pod.Name, "1.0.0.0", 1)
 	_, errorPost := vmtEvents.Create(event)
 	if errorPost != nil {
 		glog.Errorf("Error posting vmtevent: %s\n", errorPost)
+	}
+
+	getEvent, err := vmtEvents.Get()
+	if err != nil {
+		glog.Errorf("Error is %s", err)
+	} else {
+		glog.Infof("Get %+v", getEvent)
 	}
 
 	// ----------------- try channel and vmtevent -------------

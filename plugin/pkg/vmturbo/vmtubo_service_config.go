@@ -5,6 +5,7 @@ import (
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/fields"
+	"k8s.io/kubernetes/pkg/storage"
 
 	vmtcache "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/cache"
 	vmtmeta "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
@@ -14,6 +15,7 @@ import (
 type Config struct {
 	Client        *client.Client
 	Meta          *vmtmeta.VMTMeta
+	EtcdStorage   storage.Interface
 	NodeQueue     *vmtcache.HashedFIFO
 	PodQueue      *vmtcache.HashedFIFO
 	VMTEventQueue *vmtcache.HashedFIFO
