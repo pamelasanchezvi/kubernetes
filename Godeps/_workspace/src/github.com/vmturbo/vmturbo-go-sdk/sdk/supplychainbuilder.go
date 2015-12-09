@@ -69,7 +69,7 @@ func (scb *SupplyChainBuilder) hasTopNode() bool {
 // An external entity is on ethat exists in teh Operations Manager supply chain, but has not been
 // discovered by the probe. Operations Manager uses this link by the Operations Manager market. This
 // external entity can be a provider or a consumer.
-func (scb *SupplyChainBuilder) connectsTo(extEntityLink *ExternalEntityLink) *SupplyChainBuilder {
+func (scb *SupplyChainBuilder) ConnectsTo(extEntityLink *ExternalEntityLink) *SupplyChainBuilder {
 	err := scb.requireCurrentNode()
 	if err != nil {
 		return scb

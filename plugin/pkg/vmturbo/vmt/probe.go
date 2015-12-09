@@ -351,6 +351,7 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 		entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, minionId)
 		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, "Container", podCpuCapacity)
 		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, "Container", podMemCapacity)
+		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", minionId)
 
 		entityDto := entityDTOBuilder.Create()
 		result = append(result, entityDto)

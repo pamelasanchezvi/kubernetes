@@ -329,10 +329,21 @@ func createSupplyChain() []*sdk.TemplateDTO {
 	}
 	vAppSupplyChainNodeBuilder = vAppSupplyChainNodeBuilder.Provider(sdk.EntityDTO_APPLICATION, sdk.Provider_LAYERED_OVER).Buys(*transactionTemplateComm)
 
+	// Link from Application to VM
+	extLinkBuilder := sdk.NewExternalEntityLinkBuilder()
+	extLinkBuilder.Link(sdk.EntityDTO_CONTAINER_POD, sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_LAYERED_OVER).
+		Commodity(cpuAllocationType).
+		Commodity(memAllocationType).
+		ProbeEntityPropertyDef(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS, "IP Address where the Application is running").
+		ExternalEntityPropertyDef(sdk.VM_IP)
+
+	vmExternalLink := extLinkBuilder.Build()
+
 	supplyChainBuilder := sdk.NewSupplyChainBuilder()
 	supplyChainBuilder.Top(vAppSupplyChainNodeBuilder)
 	supplyChainBuilder.Entity(appSupplyChainNodeBuilder)
 	supplyChainBuilder.Entity(podSupplyChainNodeBuilder)
+	supplyChainBuilder.ConnectsTo(vmExternalLink)
 	supplyChainBuilder.Entity(minionSupplyChainNodeBuilder)
 
 	return supplyChainBuilder.Create()
