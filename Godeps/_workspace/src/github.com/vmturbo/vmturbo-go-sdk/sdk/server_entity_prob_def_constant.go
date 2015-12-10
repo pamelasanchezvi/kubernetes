@@ -26,15 +26,3 @@ func getVirtualMachineIpProperty() *ExternalEntityLink_ServerEntityPropDef {
 		PropertyHandler: ipHandler,
 	}
 }
-
-// // connecting APP to VMs
-//     private static final PropertyHandler ipHandler = PropertyHandler
-//             .newBuilder().setEntityType(EntityType.IP)
-//             .setMethodName("getAddress").setDirectlyApply(false).build();
-
-//     *
-//      * A constant to get the IP Address for VMs in the Operations Manager topology.
-
-//     public static final ServerEntityPropDef VM_IP = ServerEntityPropDef.newBuilder()
-//                     .setEntity(EntityType.VIRTUAL_MACHINE).setAttribute("UsesEndPoints")
-//                     .setPropertyHandler(ipHandler).build();
