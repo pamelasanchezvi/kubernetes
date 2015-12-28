@@ -143,6 +143,7 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", ipAddress)
 		glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", nodeIP)
 
+		// machineUid := node.Status.NodeInfo.MachineID
 		// entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_PHYSICAL_MACHINE, machineUid)
 		// entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU, "", cpuUsed)
 		// entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM, "", memUsed)

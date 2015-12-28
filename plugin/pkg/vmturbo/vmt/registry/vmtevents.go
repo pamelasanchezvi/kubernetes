@@ -5,25 +5,28 @@ import (
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client"
-	"k8s.io/kubernetes/pkg/fields"
-	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/runtime"
-	"k8s.io/kubernetes/pkg/storage"
 	"k8s.io/kubernetes/pkg/util"
-	"k8s.io/kubernetes/pkg/watch"
+	// "k8s.io/kubernetes/pkg/watch"
+
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage/watch"
 
 	"github.com/golang/glog"
+)
+
+const (
+	VMTEVENT_KEY_PREFIX string = "/vmtevents/"
 )
 
 // events implements Events interface
 type vmtevents struct {
 	client      *client.Client
 	namespace   string
-	etcdStorage storage.Interface
+	etcdStorage storage.Storage
 }
 
 // newEvents returns a new events object.
-func NewVMTEvents(c *client.Client, ns string, etcd storage.Interface) *vmtevents {
+func NewVMTEvents(c *client.Client, ns string, etcd storage.Storage) *vmtevents {
 	return &vmtevents{
 		client:      c,
 		namespace:   ns,
@@ -37,7 +40,7 @@ func (e *vmtevents) Create(event *VMTEvent) (*VMTEvent, error) {
 	if e.namespace != "" && event.Namespace != e.namespace {
 		return nil, fmt.Errorf("can't create an event with namespace '%v' in namespace '%v'", event.Namespace, e.namespace)
 	}
-	api.Scheme.AddKnownTypes("", &VMTEvent{})
+	// api.Scheme.AddKnownTypes("", &VMTEvent{})
 	out, err := e.create(event)
 	if err != nil {
 		return nil, err
@@ -47,37 +50,26 @@ func (e *vmtevents) Create(event *VMTEvent) (*VMTEvent, error) {
 }
 
 // Create inserts a new item according to the unique key from the object.
-func (e *vmtevents) create(obj runtime.Object) (runtime.Object, error) {
-	key := "/vmtevents/"
+func (e *vmtevents) create(obj interface{}) (interface{}, error) {
 	name := obj.(*VMTEvent).Name
-	key = key + name
+	key := VMTEVENT_KEY_PREFIX + name
 	ttl := uint64(10000)
 
-	glog.Infof("About to create object")
+	glog.Infof("Create vmtevent object")
 	out := &VMTEvent{}
 	if err := e.etcdStorage.Create(key, obj, out, ttl); err != nil {
+		glog.Errorf("Error during create VMTEvent: %s", err)
 		return nil, err
 	}
-	glog.Infof("Object created")
 	return out, nil
 }
 
-// // Get returns the given event, or an error.
-// func (e *vmtevents) Get(name string) (*VMTEvent, error) {
-// 	result := &VMTEvent{}
-// 	err := e.client.Get().
-// 		NamespaceIfScoped(e.namespace, len(e.namespace) > 0).
-// 		Resource("vmtevents").
-// 		Name(name).
-// 		Do().
-// 		Into(result)
-// 	return result, err
-// }
-
 // Get retrieves the item from etcd.
-func (e *vmtevents) Get() (runtime.Object, error) {
+func (e *vmtevents) Get() (interface{}, error) {
 	obj := &VMTEvent{}
-	key := "/vmtevents/1"
+	key := VMTEVENT_KEY_PREFIX
+	glog.Infof("Get %s", key)
+
 	e.List()
 
 	if err := e.etcdStorage.Get(key, obj, false); err != nil {
@@ -90,60 +82,59 @@ func (e *vmtevents) Get() (runtime.Object, error) {
 func (e *vmtevents) List() (*VMTEventList, error) {
 	result := &VMTEventList{}
 	r, err := e.ListPredicate()
+	if err != nil {
+		return nil, err
+	}
+	// glog.Infof("List(): %s", r)
 	result = r.(*VMTEventList)
 	return result, err
+
 }
 
 // ListPredicate returns a list of all the items matching m.
-func (e *vmtevents) ListPredicate() (runtime.Object, error) {
+func (e *vmtevents) ListPredicate() (interface{}, error) {
 	list := &VMTEventList{}
-	rootKey := "/vmtevents/"
+	rootKey := VMTEVENT_KEY_PREFIX
 	err := e.etcdStorage.List(rootKey, list)
 	if err != nil {
 		return nil, err
 	}
-	glog.Infof("The list is %v", list)
 	return list, err
 }
 
 // Watch starts watching for vmtevents matching the given selectors.
-func (e *vmtevents) Watch(label labels.Selector, field fields.Selector, resourceVersion string) (watch.Interface, error) {
-	return e.client.Get().
-		Prefix("watch").
-		NamespaceIfScoped(e.namespace, len(e.namespace) > 0).
-		Resource("vmtevents").
-		Param("resourceVersion", resourceVersion).
-		LabelsSelectorParam(label).
-		FieldsSelectorParam(field).
-		Watch()
+func (e *vmtevents) Watch(resourceVersion uint64) (watch.Interface, error) {
+	rootKey := VMTEVENT_KEY_PREFIX
+	watch, err := e.etcdStorage.Watch(rootKey, resourceVersion, nil)
+	if err != nil {
+		return nil, err
+	}
+	return watch, nil
 }
 
 // Delete deletes an existing event.
 func (e *vmtevents) Delete(name string) error {
-	return e.client.Delete().
-		NamespaceIfScoped(e.namespace, len(e.namespace) > 0).
-		Resource("vmtevents").
-		Name(name).
-		Do().
-		Error()
+	key := VMTEVENT_KEY_PREFIX + name
+	res := &VMTEvent{}
+	err := e.etcdStorage.Delete(key, res)
+	if err != nil {
+		glog.Errorf("Error deleting %s: %v", key, err)
+	}
+	return err
 }
 
 func (e *vmtevents) DeleteAll() error {
-	// events, err := e.List()
-	// if err != nil {
-	// 	return fmt.Errorf("Error listing all vmt events: %s", err)
-	// }
-	// for _, event := range events.Items {
-	// 	errDeleteSingle := e.Delete(event.Name)
-	// 	if errDeleteSingle != nil {
-	// 		return fmt.Errorf("Error delete %s: %s", event.Name, errDeleteSingle)
-	// 	}
-	// }
-	return e.client.Delete().
-		NamespaceIfScoped(e.namespace, len(e.namespace) > 0).
-		Resource("vmtevents").
-		Do().
-		Error()
+	events, err := e.List()
+	if err != nil {
+		return fmt.Errorf("Error listing all vmt events: %s", err)
+	}
+	for _, event := range events.Items {
+		errDeleteSingle := e.Delete(event.Name)
+		if errDeleteSingle != nil {
+			return fmt.Errorf("Error delete %s: %s", event.Name, errDeleteSingle)
+		}
+	}
+	return nil
 }
 
 // Build a new VMTEvent.
@@ -162,6 +153,9 @@ func makeVMTEvent(actionType, namespace, targetSE, destination string, messageId
 		namespace = api.NamespaceDefault
 	}
 	return &VMTEvent{
+		TypeMeta: TypeMeta{
+			Kind: "VMTEvent",
+		},
 		ObjectMeta: ObjectMeta{
 			Name:      fmt.Sprintf("%v.%x", targetSE, t.UnixNano()),
 			Namespace: namespace,

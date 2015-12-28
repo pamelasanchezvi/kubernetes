@@ -35,9 +35,3 @@ func ValidateEvent(event *api.Event) errs.ValidationErrorList {
 	}
 	return allErrs
 }
-
-// ValidateEvent makes sure that the event makes sense.
-func ValidateVMTEvent(event *api.VMTEvent) errs.ValidationErrorList {
-
-	return nil
-}

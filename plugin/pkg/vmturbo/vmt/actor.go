@@ -8,8 +8,9 @@ import (
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/storage"
+	// "k8s.io/kubernetes/pkg/storage"
 
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/registry"
 
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"
@@ -20,7 +21,7 @@ import (
 // KubernetesActionExecutor is responsilbe for executing different kinds of action requested by vmt server.
 type KubernetesActionExecutor struct {
 	kubeClient  *client.Client
-	etcdStorage storage.Interface
+	etcdStorage storage.Storage
 }
 
 // Switch between different kinds of the action according to action request and call the actually corresponding

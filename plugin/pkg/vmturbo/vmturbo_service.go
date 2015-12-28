@@ -41,12 +41,12 @@ func (v *VMTurboService) Run() {
 	// register and validates to vmturbo server
 	go vmtCommunicator.Run()
 
-	//delete all the vmt events
-	vmtEvents := registry.NewVMTEvents(v.config.Client, "", v.config.EtcdStorage)
-	errorDelete := vmtEvents.DeleteAll()
-	if errorDelete != nil {
-		glog.V(3).Infof("Error deleting all vmt events: %s", errorDelete)
-	}
+	// //delete all the vmt events
+	// vmtEvents := registry.NewVMTEvents(v.config.Client, "", v.config.EtcdStorage)
+	// errorDelete := vmtEvents.DeleteAll()
+	// if errorDelete != nil {
+	// 	glog.V(3).Infof("Error deleting all vmt events: %s", errorDelete)
+	// }
 
 	// These three go routine is responsible for watching corresponding watchable resource.
 	go util.Until(v.getNextNode, 0, v.config.StopEverything)
@@ -57,7 +57,7 @@ func (v *VMTurboService) Run() {
 // When new node added in, this function is called. Otherwise, it is blocked.
 func (v *VMTurboService) getNextVMTEvent() {
 	event := v.config.VMTEventQueue.Pop().(*registry.VMTEvent)
-	glog.V(2).Infof("Get a new Event %v", event.ActionType)
+	glog.Infof("Get a new Event %v from etcd", event.ActionType)
 	if event.ActionType == "move" || event.ActionType == "provision" {
 		glog.V(2).Infof("Get a valid vmtevent from etcd.")
 
@@ -85,12 +85,14 @@ func (v *VMTurboService) getNextPod() {
 		glog.Errorf("Error posting vmtevent: %s\n", errorPost)
 	}
 
-	getEvent, err := vmtEvents.Get()
-	if err != nil {
-		glog.Errorf("Error is %s", err)
-	} else {
-		glog.Infof("Get %+v", getEvent)
-	}
+	go vmtEvents.Watch(0)
+
+	// getEvent, err := vmtEvents.Get()
+	// if err != nil {
+	// 	glog.Errorf("Error is %s", err)
+	// } // else {
+	// // 	// glog.Infof("Get %+v", getEvent)
+	// // }
 
 	// ----------------- try channel and vmtevent -------------
 	select {

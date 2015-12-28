@@ -29,14 +29,20 @@ import (
 	"k8s.io/kubernetes/pkg/client/clientcmd"
 	clientcmdapi "k8s.io/kubernetes/pkg/client/clientcmd/api"
 	"k8s.io/kubernetes/pkg/master"
-	"k8s.io/kubernetes/pkg/storage"
+	// "k8s.io/kubernetes/pkg/storage"
 	"k8s.io/kubernetes/pkg/tools"
 	// "k8s.io/kubernetes/pkg/healthz"
 	"k8s.io/kubernetes/pkg/master/ports"
 	// "k8s.io/kubernetes/pkg/util"
-	"k8s.io/kubernetes/plugin/pkg/vmturbo"
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
+
 	forked "k8s.io/kubernetes/third_party/forked/coreos/go-etcd/etcd"
+
+	"k8s.io/kubernetes/plugin/pkg/vmturbo"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/conversion"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
+	etcdhelper "k8s.io/kubernetes/plugin/pkg/vmturbo/storage/etcd"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/registry"
 
 	"github.com/coreos/go-etcd/etcd"
 	"github.com/golang/glog"
@@ -129,15 +135,13 @@ func (s *VMTServer) Run(_ []string) error {
 	vmtMeta := metadata.NewVMTMeta(s.Server, "", "", "", "")
 	glog.V(3).Infof("The vmt server address is %s", vmtMeta.ServerAddress)
 
-	vmtConfig := vmturbo.NewVMTConfig(kubeClient, vmtMeta)
-
 	s.EtcdPathPrefix = master.DefaultEtcdPathPrefix
 	etcdStorage, err := newEtcd(s.EtcdConfigFile, s.EtcdServerList, latest.InterfacesFor, latest.Version, "", s.EtcdPathPrefix)
 	if err != nil {
 		glog.Warningf("Error creating etcd storage instance for vmt service: %s", err)
-	} else {
-		vmtConfig.EtcdStorage = etcdStorage
 	}
+
+	vmtConfig := vmturbo.NewVMTConfig(kubeClient, etcdStorage, vmtMeta)
 
 	vmtService := vmturbo.NewVMTurboService(vmtConfig)
 
@@ -146,7 +150,7 @@ func (s *VMTServer) Run(_ []string) error {
 	select {}
 }
 
-func newEtcd(etcdConfigFile string, etcdServerList []string, interfacesFunc meta.VersionInterfacesFunc, defaultVersion, storageVersion, pathPrefix string) (etcdStorage storage.Interface, err error) {
+func newEtcd(etcdConfigFile string, etcdServerList []string, interfacesFunc meta.VersionInterfacesFunc, defaultVersion, storageVersion, pathPrefix string) (etcdStorage storage.Storage, err error) {
 	var client tools.EtcdClient
 	if etcdConfigFile != "" {
 		client, err = etcd.NewClientFromFile(etcdConfigFile)
@@ -169,5 +173,10 @@ func newEtcd(etcdConfigFile string, etcdServerList []string, interfacesFunc meta
 	if storageVersion == "" {
 		storageVersion = defaultVersion
 	}
-	return master.NewEtcdStorage(client, interfacesFunc, storageVersion, pathPrefix)
+	master.NewEtcdStorage(client, interfacesFunc, storageVersion, pathPrefix)
+
+	simpleCodec := conversion.NewSimpleCodec()
+	simpleCodec.AddKnownTypes(&registry.VMTEvent{})
+	simpleCodec.AddKnownTypes(&registry.VMTEventList{})
+	return etcdhelper.NewEtcdStorage(client, simpleCodec, pathPrefix), nil
 }

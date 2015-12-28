@@ -72,8 +72,6 @@ func init() {
 		&ThirdPartyResource{},
 		&ThirdPartyResourceList{},
 		&ThirdPartyResourceData{},
-		&VMTEvent{},
-		&VMTEventList{},
 	)
 	// Legacy names are supported
 	Scheme.AddKnownTypeWithName("", "Minion", &Node{})
@@ -127,6 +125,3 @@ func (*RangeAllocation) IsAnAPIObject()           {}
 func (*ThirdPartyResource) IsAnAPIObject()        {}
 func (*ThirdPartyResourceList) IsAnAPIObject()    {}
 func (*ThirdPartyResourceData) IsAnAPIObject()    {}
-
-func (*VMTEvent) IsAnAPIObject()     {}
-func (*VMTEventList) IsAnAPIObject() {}

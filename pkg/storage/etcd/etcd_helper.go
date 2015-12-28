@@ -92,6 +92,7 @@ func (h *etcdHelper) Create(key string, obj, out runtime.Object, ttl uint64) err
 	key = h.prefixEtcdKey(key)
 	data, err := h.codec.Encode(obj)
 	if err != nil {
+		glog.Errorf("Error Encode: %s", err)
 		return err
 	}
 	if h.versioner != nil {

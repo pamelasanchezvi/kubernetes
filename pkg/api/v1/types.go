@@ -1814,43 +1814,6 @@ type EventList struct {
 	Items []Event `json:"items" description:"list of events"`
 }
 
-// VMTEvent defines all kinds of events those related to VMT service.
-// TODO. Current VMTEvent is only for Move action. The same struct is also define in v1->type.go
-type VMTEvent struct {
-	TypeMeta   `json:",inline"`
-	ObjectMeta `json:"metadata,omitempty"`
-
-	// The type of the action
-	ActionType string `json:"actionType,omitempty"`
-
-	// The name of the related SE
-	TargetSE string `json:"targetSE,omitempty"`
-
-	// the destination of the move action. Should be the name of the node.
-	Destination string `json:"destination,omitempty"`
-
-	// This field to store the messageID of the incoming server request.
-	// The same message ID should be used to create a valid response.
-	VMTMessageID int `json:"messageId,omitempty"`
-
-	// The time at which the event was first recorded. (Time of server receipt is in TypeMeta.)
-	FirstTimestamp util.Time `json:"firstTimestamp,omitempty"`
-
-	// The time at which the most recent occurrence of this event was recorded.
-	LastTimestamp util.Time `json:"lastTimestamp,omitempty"`
-
-	// The number of times this event has occurred.
-	Count int `json:"count,omitempty"`
-}
-
-// EventList is a list of events.
-type VMTEventList struct {
-	TypeMeta `json:",inline"`
-	ListMeta `json:"metadata,omitempty" description:"standard list metadata; see http://releases.k8s.io/HEAD/docs/devel/api-conventions.md#metadata"`
-
-	Items []VMTEvent `json:"items" description:"list of events"`
-}
-
 // List holds a list of objects, which may not be known by the server.
 type List struct {
 	TypeMeta `json:",inline"`

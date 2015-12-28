@@ -6,13 +6,14 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/labels"
-	"k8s.io/kubernetes/pkg/storage"
+	// "k8s.io/kubernetes/pkg/storage"
 
 	vmtapi "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/api"
 	vmtmeta "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
 
 	comm "github.com/vmturbo/vmturbo-go-sdk/communicator"
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
 
 	"github.com/golang/glog"
 )
@@ -22,7 +23,7 @@ type KubernetesServerMessageHandler struct {
 	kubeClient  *client.Client
 	meta        *vmtmeta.VMTMeta
 	wsComm      *comm.WebSocketCommunicator
-	etcdStorage storage.Interface
+	etcdStorage storage.Storage
 }
 
 // Use the vmt restAPI to add a Kubernetes target.
@@ -157,10 +158,10 @@ type VMTCommunicator struct {
 	kubeClient  *client.Client
 	meta        *vmtmeta.VMTMeta
 	wsComm      *comm.WebSocketCommunicator
-	etcdStorage storage.Interface
+	etcdStorage storage.Storage
 }
 
-func NewVMTCommunicator(client *client.Client, vmtMetadata *vmtmeta.VMTMeta, storage storage.Interface) *VMTCommunicator {
+func NewVMTCommunicator(client *client.Client, vmtMetadata *vmtmeta.VMTMeta, storage storage.Storage) *VMTCommunicator {
 	return &VMTCommunicator{
 		kubeClient:  client,
 		meta:        vmtMetadata,
@@ -276,6 +277,22 @@ func createSupplyChain() []*sdk.TemplateDTO {
 		Selling(sdk.CommodityDTO_MEM_ALLOCATION).
 		Selling(sdk.CommodityDTO_VCPU).
 		Selling(sdk.CommodityDTO_VMEM)
+
+	emptyKey := ""
+	// cpuType := sdk.CommodityDTO_CPU
+	// cpuTemplateComm := &sdk.TemplateCommodity{
+	// 	Key:           &emptyKey,
+	// 	CommodityType: &cpuType,
+	// }
+	// memType := sdk.CommodityDTO_MEM
+	// memTemplateComm := &sdk.TemplateCommodity{
+	// 	Key:           &emptyKey,
+	// 	CommodityType: &memType,
+	// }
+	// minionSupplyChainNodeBuilder = minionSupplyChainNodeBuilder.
+	// 	Provider(sdk.EntityDTO_PHYSICAL_MACHINE, sdk.Provider_HOSTING).
+	// 	Buys(*cpuTemplateComm).
+	// 	Buys(*memTemplateComm)
 	glog.V(3).Infof(".......... minion supply chain node builder is created ..........")
 
 	// Pod Supplychain builder
@@ -285,7 +302,6 @@ func createSupplyChain() []*sdk.TemplateDTO {
 		Selling(sdk.CommodityDTO_CPU_ALLOCATION).
 		Selling(sdk.CommodityDTO_MEM_ALLOCATION)
 
-	emptyKey := ""
 	cpuAllocationType := sdk.CommodityDTO_CPU_ALLOCATION
 	cpuAllocationTemplateComm := &sdk.TemplateCommodity{
 		Key:           &emptyKey,
