@@ -67,13 +67,23 @@ func (handler *KubernetesServerMessageHandler) Validate(serverMsg *comm.Mediatio
 
 	// TODO: Need to sleep some time, waiting validated. Or we should add reponse msg from server.
 	time.Sleep(100 * time.Millisecond)
+	glog.V(3).Infof("Discovery Target after validation")
+
 	handler.DiscoverTarget()
 }
+
+var count int32 = 0
 
 // DiscoverTopology receives a discovery request from server and start probing the k8s.
 func (handler *KubernetesServerMessageHandler) DiscoverTopology(serverMsg *comm.MediationServerMessage) {
 	//Discover the kubernetes topology
 	glog.V(3).Infof("Discover topology request from server.")
+	glog.V(3).Infof("count is %d", count)
+	if count < 1 {
+		count++
+
+		// return
+	}
 
 	// 1. Get message ID
 	messageID := serverMsg.GetMessageID()

@@ -84,6 +84,17 @@ func read(filePath string) (string, error) {
 	return string(dat), nil
 }
 
+// Write action description to the specified file.
+func write(actionDescription, filePath string) error {
+	// To start, here’s how to dump a string (or just bytes) into a file.
+	ad := []byte(actionDescription)
+	err := ioutil.WriteFile(filePath, ad, 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // the info is stored in this way.
 // Action\tPod\tDestination\tMsgId.
 // TODO. This might be stored and implemented using etcd.
@@ -93,6 +104,12 @@ func getNameOfMovedPod(base string) (name string) {
 	entry, err := read(filePath)
 	if err != nil {
 		glog.Errorf("Error reading in %s: %s", filePath, err)
+		return ""
+	}
+
+	err = write("", filePath)
+	if err != nil {
+		glog.Errorf("Error clearing %s: %s", filePath, err)
 		return ""
 	}
 
