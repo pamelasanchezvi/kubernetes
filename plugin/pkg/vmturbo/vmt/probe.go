@@ -121,7 +121,7 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		cpuUsed := float64(rootCurCpu) * float64(cpuFrequency)
 		memUsed := float64(rootCurMem)
 
-		cpuUsed = float64(8000)
+		// cpuUsed = float64(8000)
 
 		// machineUid := node.Status.NodeInfo.MachineID
 
@@ -138,7 +138,7 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 
 		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 		tmp := nodeIP
-		tmp = "10.10.173.131"
+		// tmp = "10.10.173.131"
 		ipAddress := tmp
 		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", ipAddress)
 		glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", nodeIP)
@@ -392,7 +392,7 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 
 		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 		tmp := minionId
-		tmp = "10.10.173.131"
+		// tmp = "10.10.173.131"
 		ipAddress := tmp
 		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", ipAddress)
 		// glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", minionId)
@@ -518,7 +518,7 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 
 				appType := app.Cmd
 				tmp := nodeName
-				tmp = "10.10.173.131"
+				// tmp = "10.10.173.131"
 				ipAddress := tmp
 				glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", ipAddress)
 

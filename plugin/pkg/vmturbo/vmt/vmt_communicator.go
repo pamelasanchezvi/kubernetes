@@ -82,7 +82,7 @@ func (handler *KubernetesServerMessageHandler) DiscoverTopology(serverMsg *comm.
 	if count < 1 {
 		count++
 
-		// return
+		return
 	}
 
 	// 1. Get message ID
