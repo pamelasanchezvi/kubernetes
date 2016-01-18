@@ -34,11 +34,14 @@ import (
 	"k8s.io/kubernetes/pkg/api/meta"
 	"k8s.io/kubernetes/pkg/client/cache"
 	// "k8s.io/kubernetes/pkg/runtime"
+	"k8s.io/kubernetes/pkg/tools"
 	"k8s.io/kubernetes/pkg/util"
 	// "k8s.io/kubernetes/pkg/watch"
 
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/conversion"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage/watch"
+
+	"github.com/coreos/go-etcd/etcd"
 )
 
 // ListerWatcher is any object that knows how to perform an initial list and start a watch on a resource.
@@ -182,18 +185,18 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 	resyncCh, cleanup := r.resyncChan()
 	defer cleanup()
 
-	list, err := r.listerWatcher.List()
-	if err != nil {
-		glog.Errorf("%s: Failed to list %v: %v", r.name, r.expectedType, err)
-		return fmt.Errorf("%s: Failed to list %v: %v", r.name, r.expectedType, err)
-	}
-	glog.Infof("The list from listerWatcher is %v", list)
-	meta, err := meta.Accessor(list)
-	if err != nil {
-		glog.Errorf("%s: Unable to understand list result %#v", r.name, list)
-		return fmt.Errorf("%s: Unable to understand list result %#v", r.name, list)
-	}
-	glog.Infof("meta is %v", meta)
+	// list, err := r.listerWatcher.List()
+	// if err != nil {
+	// 	glog.Errorf("%s: Failed to list %v: %v", r.name, r.expectedType, err)
+	// 	return fmt.Errorf("%s: Failed to list %v: %v", r.name, r.expectedType, err)
+	// }
+	// glog.Infof("The list from listerWatcher is %v", list)
+	// meta, err := meta.Accessor(list)
+	// if err != nil {
+	// 	glog.Errorf("%s: Unable to understand list result %#v", r.name, list)
+	// 	return fmt.Errorf("%s: Unable to understand list result %#v", r.name, list)
+	// }
+	// glog.Infof("meta is %v", meta)
 	// resourceVersion = meta.ResourceVersion()
 	// items, err := ExtractList(list)
 	// // items := list.([]interface{})
@@ -210,8 +213,14 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 	resourceVersion = "0"
 
 	for {
+		// glog.Info("in for")
 		w, err := r.listerWatcher.Watch(resourceVersion)
+		// glog.Infof("error from listerWather is %v", err)
+
 		if err != nil {
+			if etcdError, ok := err.(*etcd.EtcdError); ok && etcdError != nil && etcdError.ErrorCode == tools.EtcdErrorCodeNotFound {
+				continue
+			}
 			switch err {
 			case io.EOF:
 				// watch closed normally
@@ -235,15 +244,19 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 			glog.Errorf("Error during calling watch: %v", err)
 			return nil
 		}
+		glog.Infof("watch from listerWather is %v", w)
+
 		if err := r.watchHandler(w, &resourceVersion, resyncCh, stopCh); err != nil {
 			if err != errorResyncRequested && err != errorStopRequested {
 				glog.Warningf("%s: watch of %v ended with: %v", r.name, r.expectedType, err)
 			}
 			if err != nil {
-				glog.Error("Error calling watchHandler: %v", err)
+				glog.Error("Error calling watchHandler: %s", err)
 			}
+			glog.Infof("returned and no more for")
 			return nil
 		}
+		glog.Info("End of for")
 	}
 }
 
@@ -272,7 +285,7 @@ func (r *Reflector) watchHandler(w watch.Interface, resourceVersion *string, res
 
 loop:
 	for {
-		glog.Info("Inside for loop of watchHandler")
+		// glog.Info("Inside for loop of watchHandler")
 		select {
 		case <-stopCh:
 			return errorStopRequested

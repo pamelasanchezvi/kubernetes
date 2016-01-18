@@ -4,11 +4,11 @@ const (
 	// Appliance address.
 	// SERVER_ADDRESS string = "10.10.173.193:80"
 
-	// SERVER_ADDRESS string = "10.10.192.78:8080"
+	SERVER_ADDRESS string = "10.10.192.78:8080"
 
 	// SERVER_ADDRESS string = "10.10.200.114:8080"
 
-	SERVER_ADDRESS string = "192.168.1.4:8080"
+	// SERVER_ADDRESS string = "192.168.1.4:8080"
 
 	// SERVER_ADDRESS string = "192.168.1.4:8080"
 

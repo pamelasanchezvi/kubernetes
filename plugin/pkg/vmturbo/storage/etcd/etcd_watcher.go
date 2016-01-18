@@ -113,12 +113,17 @@ func newEtcdWatcher(list bool, include includeFunc, filter storage.FilterFunc, e
 // etcdWatch calls etcd's Watch function, and handles any errors. Meant to be called
 // as a goroutine.
 func (w *etcdWatcher) etcdWatch(client tools.EtcdClient, key string, resourceVersion uint64) {
-	glog.Infof("Watching")
+	// glog.Infof("Watching")
 	defer util.HandleCrash()
 	defer close(w.etcdError)
 	if resourceVersion == 0 {
 		latest, err := etcdGetInitialWatchState(client, key, w.list, w.etcdIncoming)
 		if err != nil {
+			if etcdError, ok := err.(*etcd.EtcdError); ok && etcdError != nil && etcdError.ErrorCode == tools.EtcdErrorCodeNotFound {
+				// glog.Errorf("Error getting initial watch, key not found: %v", err)
+
+				return
+			}
 			glog.Errorf("Error getting initial watch: %v", err)
 			w.etcdError <- err
 			return
@@ -141,12 +146,12 @@ func etcdGetInitialWatchState(client tools.EtcdClient, key string, recursive boo
 	if err != nil {
 		// if !IsEtcdNotFound(err) {
 		// 	glog.Errorf("watch was unable to retrieve the current index for the provided key (%q): %v", key, err)
-		// 	return resourceVersion, err
+		// 	return 0, err
 		// }
 		// if index, ok := etcdErrorIndex(err); ok {
 		// 	resourceVersion = index
 		// }
-		glog.Errorf("Error get intial: %v", err)
+		// glog.Errorf("Error get intial: %v", err)
 
 		return 0, err
 	}
@@ -360,7 +365,7 @@ func (w *etcdWatcher) sendResult(res *etcd.Response) {
 
 // ResultChan implements watch.Interface.
 func (w *etcdWatcher) ResultChan() <-chan watch.Event {
-	glog.Info("Call ResultChan()")
+	// glog.Info("Call ResultChan()")
 	return w.outgoing
 }
 

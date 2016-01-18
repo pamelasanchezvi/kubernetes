@@ -17,7 +17,7 @@ limitations under the License.
 package storage
 
 import (
-	// "reflect"
+	"reflect"
 
 	"k8s.io/kubernetes/pkg/fields"
 	// "k8s.io/kubernetes/pkg/watch"
@@ -43,11 +43,15 @@ type ListWatch struct {
 // NewListWatchFromClient creates a new ListWatch from the specified client, resource, namespace and field selector.
 func NewListWatchFromStorage(s Storage, resource string, namespace string, fieldSelector fields.Selector) *ListWatch {
 	listFunc := func() (interface{}, error) {
-		// var list interface{}
-		// glog.Info(reflect.TypeOf(list))
-		// err := s.List(resource, &list)
-		// glog.Infof("Error listing: %v", err)
-		return nil, nil
+		var list interface{}
+		glog.Info(reflect.TypeOf(list))
+		err := s.List(resource, &list)
+		if err != nil {
+			glog.Infof("Error listing: %v", err)
+			return nil, err
+		}
+		glog.Infof("List Func result is :%+v", list)
+		return list, nil
 	}
 	watchFunc := func(resourceVersion string) (watch.Interface, error) {
 		return s.Watch(resource, 0, nil)

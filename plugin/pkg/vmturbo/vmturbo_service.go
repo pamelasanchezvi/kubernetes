@@ -57,7 +57,7 @@ func (v *VMTurboService) Run() {
 // When new node added in, this function is called. Otherwise, it is blocked.
 func (v *VMTurboService) getNextVMTEvent() {
 	event := v.config.VMTEventQueue.Pop().(*registry.VMTEvent)
-	glog.Infof("Get a new Event %v from etcd", event.ActionType)
+	glog.Infof("Get a new Event from etcd: %v", event)
 	if event.ActionType == "move" || event.ActionType == "provision" {
 		glog.V(2).Infof("Get a valid vmtevent from etcd.")
 

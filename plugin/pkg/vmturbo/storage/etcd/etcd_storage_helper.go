@@ -24,7 +24,6 @@ import (
 	"strings"
 	// "time"
 
-	"github.com/coreos/go-etcd/etcd"
 	"k8s.io/kubernetes/pkg/api"
 	// "k8s.io/kubernetes/pkg/conversion"
 	"k8s.io/kubernetes/pkg/runtime"
@@ -40,6 +39,7 @@ import (
 
 	// "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/registry"
 
+	"github.com/coreos/go-etcd/etcd"
 	"github.com/golang/glog"
 )
 
@@ -180,10 +180,33 @@ func (h *etcdHelper) Delete(key string, out interface{}) error {
 
 // Implements storage.Interface.
 func (h *etcdHelper) Watch(key string, resourceVersion uint64, filter storage.FilterFunc) (watch.Interface, error) {
+	// glog.Info("Watch is called")
 	key = h.prefixEtcdKey(key)
 	w := newEtcdWatcher(true, nil, filter, h.codec, nil)
-	go w.etcdWatch(h.client, key, resourceVersion)
+	exist, err := h.isKeyExist(key)
+	if exist {
+		go w.etcdWatch(h.client, key, resourceVersion)
+	} else {
+		// glog.Infof("Key %s does not exist.", key)
+		return nil, err
+	}
 	return w, nil
+}
+
+func (h *etcdHelper) isKeyExist(key string) (bool, error) {
+	_, err := h.client.Get(key, false, false)
+	if err != nil {
+		if etcdError, ok := err.(*etcd.EtcdError); ok && etcdError != nil && etcdError.ErrorCode == tools.EtcdErrorCodeNotFound {
+			// glog.Errorf("watch was unable to retrieve the current index for the provided key (%q): %v", key, err)
+			return false, etcdError
+		}
+		// if index, ok := etcdErrorIndex(err); ok {
+		// 	resourceVersion = index
+		// }
+		// glog.Errorf("Error get intial: %v", err)
+
+	}
+	return true, nil
 }
 
 // // Implements storage.Interface.
