@@ -21,6 +21,8 @@ import (
 var container2PodMap map[string]string = make(map[string]string)
 var hostSet map[string]*vmtAdvisor.Host = make(map[string]*vmtAdvisor.Host)
 
+var nodeUidTranslationMap map[string]string = make(map[string]string)
+
 type KubeProbe struct {
 	kubeClient *client.Client
 }
@@ -110,13 +112,16 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 
 		// Now start to build supply chain.
 		nodeEntityType := sdk.EntityDTO_VIRTUAL_MACHINE
-		id := node.Name
+		id := string(node.UID)
 		dispName := node.Name
+		nodeUidTranslationMap[nodeIP] = id
 		entityDTOBuilder := sdk.NewEntityDTOBuilder(nodeEntityType, id)
 
 		// Find out the used value for each commodity
 		cpuUsed := float64(rootCurCpu) * float64(cpuFrequency)
 		memUsed := float64(rootCurMem)
+
+		cpuUsed = float64(8000)
 
 		// machineUid := node.Status.NodeInfo.MachineID
 
@@ -130,7 +135,11 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 			Capacity(float64(nodeMemCapacity)).Used(memUsed)
 		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_VCPU, id).
 			Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
-		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
+
+		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
+		nodeIP2 := "10.10.173.131"
+		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", nodeIP2)
+		glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", nodeIP)
 
 		// entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_PHYSICAL_MACHINE, machineUid)
 		// entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU, "", cpuUsed)
@@ -140,8 +149,11 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		replacementEntityMetaDataBuilder.Matching(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS)
 		replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_CPU_ALLOCATION)
 		replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_MEM_ALLOCATION)
-		replacementEntityMetaDataBuilder.PatchBuying(sdk.CommodityDTO_VCPU)
-		replacementEntityMetaDataBuilder.PatchBuying(sdk.CommodityDTO_VMEM)
+
+		replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_VCPU)
+		replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_VMEM)
+		// replacementEntityMetaDataBuilder.PatchBuying(sdk.CommodityDTO_VCPU)
+		// replacementEntityMetaDataBuilder.PatchBuying(sdk.CommodityDTO_VMEM)
 		metaData := replacementEntityMetaDataBuilder.Build()
 
 		entityDTOBuilder = entityDTOBuilder.ReplacedBy(metaData)
@@ -160,10 +172,21 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		// 	Capacity(float64(nodeMemCapacity)).Used(memUsed)
 		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_CPU_ALLOCATION, "Container").
 		// 	Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
-		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_VMEM, "Application").
+		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_VMEM, "1.1.1.1").
 		// 	Capacity(float64(nodeMemCapacity)).Used(memUsed)
-		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_VCPU, "Application").
+		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_VCPU, "1.1.1.1").
 		// 	Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
+		// entityDTOBuilder2 = entityDTOBuilder2.SetProperty("ipAddress", "10.10.173.196")
+
+		// replacementEntityMetaDataBuilder2 := sdk.NewReplacementEntityMetaDataBuilder()
+		// replacementEntityMetaDataBuilder2.Matching(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS)
+		// replacementEntityMetaDataBuilder2.PatchSelling(sdk.CommodityDTO_CPU_ALLOCATION)
+		// replacementEntityMetaDataBuilder2.PatchSelling(sdk.CommodityDTO_MEM_ALLOCATION)
+		// replacementEntityMetaDataBuilder2.PatchSelling(sdk.CommodityDTO_VCPU)
+		// replacementEntityMetaDataBuilder2.PatchSelling(sdk.CommodityDTO_VMEM)
+		// metaData2 := replacementEntityMetaDataBuilder2.Build()
+
+		// entityDTOBuilder2 = entityDTOBuilder2.ReplacedBy(metaData2)
 		// entityDto2 := entityDTOBuilder2.Create()
 		// result = append(result, entityDto2)
 	}
@@ -258,7 +281,7 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 				// TODO! hardcoded here. Works but not good. Maybe can find better solution?
 				// The value returned here is namespace/podname
 				if podName, ok := container.Spec.Labels["io.kubernetes.pod.name"]; ok {
-					glog.V(3).Infof("Container %s is in Pod %s", container.Name, podName)
+					glog.V(4).Infof("Container %s is in Pod %s", container.Name, podName)
 					var containers []*vmtAdvisor.Container
 					if ctns, exist := podContainers[podName]; exist {
 						containers = ctns
@@ -358,12 +381,17 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 		glog.V(4).Infof("The actual Mem used value of %s is %f", id, podMemUsed)
 
 		entityDTOBuilder = entityDTOBuilder.DisplayName(dispName)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_MEM_ALLOCATION, podNameWithNamespace).Capacity(podMemCapacity).Used(podMemCapacity * 0.8)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_CPU_ALLOCATION, podNameWithNamespace).Capacity(podCpuCapacity).Used(podCpuCapacity * 0.8)
-		entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, minionId)
+		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_MEM_ALLOCATION, podNameWithNamespace).Capacity(podMemCapacity).Used(podMemCapacity) // * 0.8)
+		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_CPU_ALLOCATION, podNameWithNamespace).Capacity(podCpuCapacity).Used(podCpuCapacity) // * 0.8)
+		providerUid := nodeUidTranslationMap[minionId]
+		entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, providerUid)
 		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, "Container", podCpuCapacity)
 		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, "Container", podMemCapacity)
-		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
+
+		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
+		mId := "10.10.173.131"
+		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", mId)
+		glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", minionId)
 
 		entityDto := entityDTOBuilder.Create()
 		result = append(result, entityDto)
@@ -457,7 +485,7 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 
 		for podName, appMap := range pod2ApplicationMap {
 			for _, app := range appMap {
-				glog.Infof("pod %s has the following application %s", podName, app.Cmd)
+				glog.V(4).Infof("pod %s has the following application %s", podName, app.Cmd)
 
 				appEntityType := sdk.EntityDTO_APPLICATION
 				id := app.Cmd + "::" + podName
@@ -475,15 +503,20 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 				entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_CONTAINER_POD, podName)
 				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, podName, cpuUsage)
 				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, podName, memUsage)
-				entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, nodeName)
-				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VCPU, nodeName, cpuUsage)
-				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VMEM, nodeName, memUsage)
+
+				providerUid := nodeUidTranslationMap[nodeName]
+				entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, providerUid)
+				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VCPU, providerUid, cpuUsage)
+				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VMEM, providerUid, memUsage)
 				// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 
 				entityDto := entityDTOBuilder.Create()
 
 				appType := app.Cmd
 				ipAddress := "10.10.173.131"
+				// ipAddress := nodeName
+				glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", ipAddress)
+
 				appData := &sdk.EntityDTO_ApplicationData{
 					Type:      &appType,
 					IpAddress: &ipAddress,

@@ -37,7 +37,22 @@ func (kae *KubernetesActionExecutor) ExcuteAction(actionItem *sdk.ActionItemDTO,
 			podIdentifier := targetPod.GetId()
 
 			targetNode := actionItem.GetNewSE()
-			nodeIdentifier := targetNode.GetId()
+			// nodeIdentifier := targetNode.GetId()
+			// K8s uses Ip address as the Identifier. The VM name passed by actionItem is the display name
+			// that dscovered by hypervisor. So here we must get the ip address from virtualMachineData in
+			// targetNode entityDTO.
+			vmData := targetNode.GetVirtualMachineData()
+			if vmData == nil {
+				return fmt.Errorf("Missing VirtualMachineData in ActionItemDTO from server")
+			}
+			machineIPs := vmData.GetIpAddress()
+			glog.Infof("The ip of targetNode is %v", machineIPs)
+			if machineIPs == nil {
+				return fmt.Errorf("Missing Ip addresses in ActionItemDTO from server")
+			}
+			// TODO, must find a way to validate IP address.
+			nodeIdentifier := machineIPs[0]
+
 			// the pod identifier in vmt server is in "namespace/podname"
 			content := strings.Split(string(podIdentifier), "/")
 			if len(content) < 2 {

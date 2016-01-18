@@ -10,6 +10,8 @@ const (
 
 	// SERVER_ADDRESS string = "172.31.94.98:8080"
 
+	// SERVER_ADDRESS string = "192.168.1.4:8080"
+
 	TARGET_TYPE string = "Kubernetes"
 
 	NAME_OR_ADDRESS string = "k8s_vmt"
