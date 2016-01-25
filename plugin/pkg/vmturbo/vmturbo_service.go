@@ -10,7 +10,6 @@ import (
 
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt"
 	vmtapi "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/api"
-	vmtmeta "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/registry"
 
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"
@@ -170,8 +169,8 @@ func (vmtService *VMTurboService) schedule(pod *api.Pod) {
 func (vmtService *VMTurboService) getDestinationFromVmturbo(pod *api.Pod) (map[*api.Pod]string, error) {
 
 	extCongfix := make(map[string]string)
-	extCongfix["Username"] = vmtmeta.OPS_MGR_USRN
-	extCongfix["Password"] = vmtmeta.OPS_MGR_PSWD
+	extCongfix["Username"] = vmtService.config.Meta.OpsManagerUsername
+	extCongfix["Password"] = vmtService.config.Meta.OpsManagerPassword
 	vmtapi.NewVmtApi(vmtService.config.Meta.ServerAddress, extCongfix)
 	// vmturboApi := vmtapi.NewVmtApi(vmtUrl, extCongfix)
 

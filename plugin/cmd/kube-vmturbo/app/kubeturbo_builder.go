@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 
 	"k8s.io/kubernetes/pkg/api/latest"
 	"k8s.io/kubernetes/pkg/api/meta"
@@ -54,7 +55,7 @@ type VMTServer struct {
 	Port           int
 	Address        net.IP
 	Master         string
-	Server         string
+	MetaConfigPath string
 	Kubeconfig     string
 	BindPodsQPS    float32
 	BindPodsBurst  int
@@ -76,7 +77,7 @@ func NewVMTServer() *VMTServer {
 func (s *VMTServer) AddFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&s.Port, "port", s.Port, "The port that the scheduler's http service runs on")
 	fs.StringVar(&s.Master, "master", s.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig)")
-	fs.StringVar(&s.Server, "server", s.Server, "The address of the vmt server.")
+	fs.StringVar(&s.MetaConfigPath, "config-path", s.MetaConfigPath, "The path to the vmt config file.")
 	fs.StringSliceVar(&s.EtcdServerList, "etcd-servers", s.EtcdServerList, "List of etcd servers to watch (http://ip:port), comma separated. Mutually exclusive with -etcd-config")
 	fs.StringVar(&s.Kubeconfig, "kubeconfig", s.Kubeconfig, "Path to kubeconfig file with authorization and master location information.")
 }
@@ -88,8 +89,9 @@ func (s *VMTServer) Run(_ []string) error {
 		glog.Warningf("Neither --kubeconfig nor --master was specified.  Using default API client.  This might not work.")
 	}
 
-	if s.Server == "" {
-		glog.Warningf("VMT Server Address is not provided. Use the default value.")
+	if s.MetaConfigPath == "" {
+		glog.Fatalf("The path to the VMT config file is not provided.Exiting...")
+		os.Exit(1)
 	}
 
 	if (s.EtcdConfigFile != "" && len(s.EtcdServerList) != 0) || (s.EtcdConfigFile == "" && len(s.EtcdServerList) == 0) {
@@ -132,7 +134,7 @@ func (s *VMTServer) Run(_ []string) error {
 	// }()
 
 	// serverAddr, targetType, nameOrAddress, targetIdentifier, password
-	vmtMeta := metadata.NewVMTMeta(s.Server, "", "", "", "")
+	vmtMeta := metadata.NewVMTMeta(s.MetaConfigPath)
 	glog.V(3).Infof("The vmt server address is %s", vmtMeta.ServerAddress)
 
 	s.EtcdPathPrefix = master.DefaultEtcdPathPrefix

@@ -31,8 +31,8 @@ func (handler *KubernetesServerMessageHandler) AddTarget() {
 	vmtUrl := handler.wsComm.VmtServerAddress
 
 	extCongfix := make(map[string]string)
-	extCongfix["Username"] = vmtmeta.OPS_MGR_USRN
-	extCongfix["Password"] = vmtmeta.OPS_MGR_PSWD
+	extCongfix["Username"] = handler.meta.OpsManagerUsername
+	extCongfix["Password"] = handler.meta.OpsManagerPassword
 	vmturboApi := vmtapi.NewVmtApi(vmtUrl, extCongfix)
 
 	// Add Kubernetes target.
@@ -45,8 +45,8 @@ func (handler *KubernetesServerMessageHandler) DiscoverTarget() {
 	vmtUrl := handler.wsComm.VmtServerAddress
 
 	extCongfix := make(map[string]string)
-	extCongfix["Username"] = vmtmeta.OPS_MGR_USRN
-	extCongfix["Password"] = vmtmeta.OPS_MGR_PSWD
+	extCongfix["Username"] = handler.meta.OpsManagerUsername
+	extCongfix["Password"] = handler.meta.OpsManagerPassword
 	vmturboApi := vmtapi.NewVmtApi(vmtUrl, extCongfix)
 
 	// Discover Kubernetes target.

@@ -1,12 +1,19 @@
 package metadata
 
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"os"
+)
+
 const (
 	// Appliance address.
 	// SERVER_ADDRESS string = "10.10.173.193:80"
 
-	SERVER_ADDRESS string = "10.10.192.78:8080"
+	// SERVER_ADDRESS string = "10.10.192.78:8080"
 
-	// SERVER_ADDRESS string = "10.10.200.114:8080"
+	SERVER_ADDRESS string = "10.10.200.114:8080"
 
 	// SERVER_ADDRESS string = "192.168.1.4:8080"
 
@@ -31,42 +38,65 @@ const (
 )
 
 type VMTMeta struct {
-	ServerAddress     string
-	TargetType        string
-	NameOrAddress     string
-	TargetIdentifier  string
-	Password          string
-	LocalAddress      string
-	WebSocketUsername string
-	WebSocketPassword string
+	ServerAddress      string
+	TargetType         string
+	NameOrAddress      string
+	TargetIdentifier   string
+	Password           string
+	LocalAddress       string
+	WebSocketUsername  string
+	WebSocketPassword  string
+	OpsManagerUsername string
+	OpsManagerPassword string
 }
 
-func NewVMTMeta(serverAddr, targetType, nameOrAddress, targetIdentifier, password string) *VMTMeta {
+func NewVMTMeta(metaConfigFilePath string) *VMTMeta {
 	meta := &VMTMeta{
-		ServerAddress:     SERVER_ADDRESS,
-		TargetType:        TARGET_TYPE,
-		NameOrAddress:     NAME_OR_ADDRESS,
-		TargetIdentifier:  TARGET_IDENTIFIER,
-		Password:          PASSWORD,
-		LocalAddress:      LOCAL_ADDRESS,
-		WebSocketUsername: WS_SERVER_USRN,
-		WebSocketPassword: WS_SERVER_PASSWD,
+		ServerAddress:      SERVER_ADDRESS,
+		TargetType:         TARGET_TYPE,
+		NameOrAddress:      NAME_OR_ADDRESS,
+		TargetIdentifier:   TARGET_IDENTIFIER,
+		Password:           PASSWORD,
+		LocalAddress:       LOCAL_ADDRESS,
+		WebSocketUsername:  WS_SERVER_USRN,
+		WebSocketPassword:  WS_SERVER_PASSWD,
+		OpsManagerUsername: OPS_MGR_USRN,
+		OpsManagerPassword: OPS_MGR_PSWD,
 	}
-	if serverAddr != "" {
-		meta.ServerAddress = serverAddr
+
+	metaConfig := readConfig(metaConfigFilePath)
+
+	if metaConfig.ServerAddress != "" {
+		meta.ServerAddress = metaConfig.ServerAddress
 	}
-	if targetIdentifier != "" {
-		meta.TargetIdentifier = targetIdentifier
+	if metaConfig.TargetIdentifier != "" {
+		meta.TargetIdentifier = metaConfig.TargetIdentifier
 	}
-	if nameOrAddress != "" {
-		meta.NameOrAddress = nameOrAddress
+	if metaConfig.NameOrAddress != "" {
+		meta.NameOrAddress = metaConfig.NameOrAddress
 	}
-	if targetType != "" {
-		meta.TargetType = targetType
+	if metaConfig.TargetType != "" {
+		meta.TargetType = metaConfig.TargetType
 	}
-	if password != "" {
-		meta.Password = password
+	if metaConfig.Password != "" {
+		meta.Password = metaConfig.Password
 	}
 
 	return meta
+}
+
+func readConfig(path string) VMTMeta {
+	file, e := ioutil.ReadFile(path)
+	if e != nil {
+		fmt.Printf("File error: %v\n", e)
+		os.Exit(1)
+	}
+	fmt.Printf("%s\n", string(file))
+
+	//m := new(Dispatch)
+	//var m interface{}
+	var metaData VMTMeta
+	json.Unmarshal(file, &metaData)
+	fmt.Printf("Results: %v\n", metaData)
+	return metaData
 }
