@@ -4,9 +4,9 @@
 		"nameoraddress":  "k8s_vmt",
 		"targetidentifier": "my_k8s",
 		"password":"fake_password",
-		"localaddress":"http://172.16.201.167/",
+		"localaddress":"http://127.0.0.1/",
 		"websocketusername": "vmtRemoteMediation",
 		"websocketpassword": "vmtRemoteMediation",
-		"opsmanagerusername": "administrator",
-		"opsmanagerpassword": "a"
+		"vmtusername": "administrator",
+		"vmtpassword": "a"
 }

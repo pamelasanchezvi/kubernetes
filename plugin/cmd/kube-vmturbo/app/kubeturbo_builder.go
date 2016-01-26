@@ -89,6 +89,8 @@ func (s *VMTServer) Run(_ []string) error {
 		glog.Warningf("Neither --kubeconfig nor --master was specified.  Using default API client.  This might not work.")
 	}
 
+	glog.Infof("Master is %s", s.Master)
+
 	if s.MetaConfigPath == "" {
 		glog.Fatalf("The path to the VMT config file is not provided.Exiting...")
 		os.Exit(1)

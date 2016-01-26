@@ -23,6 +23,8 @@ var hostSet map[string]*vmtAdvisor.Host = make(map[string]*vmtAdvisor.Host)
 
 var nodeUidTranslationMap map[string]string = make(map[string]string)
 
+var nodeName2ExternalIPMap map[string]string = make(map[string]string)
+
 type KubeProbe struct {
 	kubeClient *client.Client
 }
@@ -61,6 +63,10 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 			// TODO Tests is needed if this is the correct address to be used.
 			if nodeAddress.Type == api.NodeLegacyHostIP {
 				nodeIP = nodeAddress.Address
+			}
+
+			if nodeAddress.Type == api.NodeExternalIP {
+				nodeName2ExternalIPMap[node.Name] = nodeAddress.Address
 			}
 		}
 
@@ -114,7 +120,7 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		nodeEntityType := sdk.EntityDTO_VIRTUAL_MACHINE
 		id := string(node.UID)
 		dispName := node.Name
-		nodeUidTranslationMap[nodeIP] = id
+		nodeUidTranslationMap[node.Name] = id
 		entityDTOBuilder := sdk.NewEntityDTOBuilder(nodeEntityType, id)
 
 		// Find out the used value for each commodity
@@ -138,10 +144,13 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 
 		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 		tmp := nodeIP
-		tmp = "10.10.173.131"
+		// tmp = "10.10.173.131"
 		ipAddress := tmp
+		if externalIP, ok := nodeName2ExternalIPMap[node.Name]; ok {
+			ipAddress = externalIP
+		}
 		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", ipAddress)
-		glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", nodeIP)
+		glog.V(3).Infof("Parse node: The ip of vm to be reconcile with is %s", nodeIP)
 
 		// machineUid := node.Status.NodeInfo.MachineID
 		// entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_PHYSICAL_MACHINE, machineUid)
@@ -390,14 +399,17 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 		entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, providerUid)
 		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, "Container", podCpuCapacity)
 		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, "Container", podMemCapacity)
-		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
+		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 
 		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
-		tmp := minionId
-		tmp = "10.10.173.131"
+		tmp := pod.Status.HostIP
+		// tmp = "10.10.173.131"
 		ipAddress := tmp
+		if externalIP, ok := nodeName2ExternalIPMap[minionId]; ok {
+			ipAddress = externalIP
+		}
 		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", ipAddress)
-		// glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", minionId)
+		glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", ipAddress)
 
 		entityDto := entityDTOBuilder.Create()
 		result = append(result, entityDto)
@@ -520,10 +532,13 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 				entityDto := entityDTOBuilder.Create()
 
 				appType := app.Cmd
-				tmp := nodeName
-				tmp = "10.10.173.131"
+				tmp := host.IP
+				// tmp = "10.10.173.131"
 				ipAddress := tmp
-				glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", ipAddress)
+				if externalIP, ok := nodeName2ExternalIPMap[nodeName]; ok {
+					ipAddress = externalIP
+				}
+				glog.V(3).Infof("Parse application: The ip of vm to be stitched is %s", ipAddress)
 
 				appData := &sdk.EntityDTO_ApplicationData{
 					Type:      &appType,
