@@ -25,6 +25,10 @@ var nodeUidTranslationMap map[string]string = make(map[string]string)
 
 var nodeName2ExternalIPMap map[string]string = make(map[string]string)
 
+var localTestingFlag bool = false
+
+var actionTestingFlag bool = false
+
 type KubeProbe struct {
 	kubeClient *client.Client
 }
@@ -127,7 +131,9 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		cpuUsed := float64(rootCurCpu) * float64(cpuFrequency)
 		memUsed := float64(rootCurMem)
 
-		// cpuUsed = float64(8000)
+		if localTestingFlag {
+			cpuUsed = float64(10000)
+		}
 
 		// machineUid := node.Status.NodeInfo.MachineID
 
@@ -144,7 +150,9 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 
 		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 		tmp := nodeIP
-		// tmp = "10.10.173.131"
+		if localTestingFlag {
+			tmp = "10.10.173.131"
+		}
 		ipAddress := tmp
 		if externalIP, ok := nodeName2ExternalIPMap[node.Name]; ok {
 			ipAddress = externalIP
@@ -392,18 +400,24 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 		glog.V(4).Infof("The actual Cpu used value of %s is %f", id, podCpuUsed)
 		glog.V(4).Infof("The actual Mem used value of %s is %f", id, podMemUsed)
 
+		if actionTestingFlag {
+			podCpuUsed = podCpuCapacity
+			podMemUsed = podMemCapacity
+		}
 		entityDTOBuilder = entityDTOBuilder.DisplayName(dispName)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_MEM_ALLOCATION, podNameWithNamespace).Capacity(podMemCapacity).Used(podMemCapacity) // * 0.8)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_CPU_ALLOCATION, podNameWithNamespace).Capacity(podCpuCapacity).Used(podCpuCapacity) // * 0.8)
+		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_MEM_ALLOCATION, podNameWithNamespace).Capacity(podMemCapacity).Used(podMemUsed) // * 0.8)
+		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_CPU_ALLOCATION, podNameWithNamespace).Capacity(podCpuCapacity).Used(podCpuUsed) // * 0.8)
 		providerUid := nodeUidTranslationMap[minionId]
 		entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, providerUid)
-		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, "Container", podCpuCapacity)
-		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, "Container", podMemCapacity)
+		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, "Container", podCpuUsed)
+		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, "Container", podMemUsed)
 		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 
 		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 		tmp := pod.Status.HostIP
-		// tmp = "10.10.173.131"
+		if localTestingFlag {
+			tmp = "10.10.173.131"
+		}
 		ipAddress := tmp
 		if externalIP, ok := nodeName2ExternalIPMap[minionId]; ok {
 			ipAddress = externalIP
@@ -516,8 +530,16 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 				glog.V(4).Infof("Percent Cpu for %s is %f, usage is %f", dispName, app.PercentCpu, cpuUsage)
 				glog.V(4).Infof("Percent Mem for %s is %f, usage is %f", dispName, app.PercentMemory, memUsage)
 
+				transactionCapacity := float64(0)
+				transactionUsed := float64(0)
+
+				if actionTestingFlag {
+					transactionCapacity = float64(10000)
+					transactionUsed = float64(9999)
+				}
+
 				entityDTOBuilder = entityDTOBuilder.DisplayName(dispName)
-				entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_TRANSACTION, app.Cmd).Capacity(10000).Used(9999)
+				entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_TRANSACTION, app.Cmd).Capacity(transactionCapacity).Used(transactionUsed)
 				entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_CONTAINER_POD, podName)
 				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, podName, cpuUsage)
 				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, podName, memUsage)
@@ -533,7 +555,9 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 
 				appType := app.Cmd
 				tmp := host.IP
-				// tmp = "10.10.173.131"
+				if localTestingFlag {
+					tmp = "10.10.173.131"
+				}
 				ipAddress := tmp
 				if externalIP, ok := nodeName2ExternalIPMap[nodeName]; ok {
 					ipAddress = externalIP
@@ -615,7 +639,11 @@ func (kubeProbe *KubeProbe) ParseService(namespace string, selector labels.Selec
 				entityDTOBuilder = entityDTOBuilder.DisplayName(dispName)
 				for _, podID := range podIDList {
 					entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_CONTAINER_POD, appName+"::"+podID)
-					entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_TRANSACTION, appName, 9999)
+					transactionBought := float64(0)
+					if actionTestingFlag {
+						transactionBought = float64(9999)
+					}
+					entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_TRANSACTION, appName, transactionBought)
 
 				}
 
