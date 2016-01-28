@@ -295,7 +295,7 @@ function start_kubevmturbo {
     VMTURBO_LOG=/tmp/kube-vmturbo.log
     sudo -E "${GO_OUT}/kube-vmturbo" \
       --v=${LOG_LEVEL} \
-      --config-path="./plugin/pkg/vmturbo/vmt/metadata/config.json" \
+      --config-path="./plugin/pkg/vmturbo/vmt/metadata/config_nyc.json" \
       --etcd-servers="http://127.0.0.1:4001" \
       --master="http://${API_HOST}:${API_PORT}" >"${VMTURBO_LOG}" 2>&1 &
 
@@ -340,7 +340,7 @@ start_apiserver
 start_controller_manager
 start_kubelet
 start_kubeproxy
-start_kubevmturbo
+# start_kubevmturbo
 print_success
 
 while true; do sleep 1; done

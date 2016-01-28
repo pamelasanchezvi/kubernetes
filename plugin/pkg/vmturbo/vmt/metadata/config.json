@@ -1,6 +1,6 @@
 {
-      "serveraddress":      "10.10.192.78:8080",
-       "targettype":   "Kubernetes",
+		"serveraddress":	"10.10.200.114:8080",
+		"targettype":"Kubernetes",
 		"nameoraddress":  "k8s_vmt",
 		"targetidentifier": "my_k8s",
 		"password":"fake_password",

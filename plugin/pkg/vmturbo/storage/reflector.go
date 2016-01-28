@@ -39,6 +39,7 @@ import (
 	// "k8s.io/kubernetes/pkg/watch"
 
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/conversion"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage/vmtruntime"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage/watch"
 
 	"github.com/coreos/go-etcd/etcd"
@@ -48,7 +49,7 @@ import (
 type ListerWatcher interface {
 	// List should return a list type object; the Items field will be extracted, and the
 	// ResourceVersion field will be used to start the watch in the right place.
-	List() (interface{}, error)
+	List() (vmtruntime.VMTObject, error)
 	// Watch should begin a watch at the specified version.
 	Watch(resourceVersion string) (watch.Interface, error)
 }
@@ -91,7 +92,6 @@ func NewNamespaceKeyedIndexerAndReflector(lw ListerWatcher, expectedType interfa
 // so that you can use reflectors to periodically process everything as well as
 // incrementally processing the things that change.
 func NewReflector(lw ListerWatcher, expectedType interface{}, store cache.Store, resyncPeriod time.Duration) *Reflector {
-	glog.Info("Create NewReflector")
 	return NewNamedReflector(getDefaultReflectorName(internalPackages...), lw, expectedType, store, resyncPeriod)
 }
 
@@ -149,7 +149,6 @@ func (r *Reflector) Run() {
 // RunUntil starts a watch and handles watch events. Will restart the watch if it is closed.
 // RunUntil starts a goroutine and returns immediately. It will exit when stopCh is closed.
 func (r *Reflector) RunUntil(stopCh <-chan struct{}) {
-	glog.Info("RunUntil")
 	go util.Until(func() { r.ListAndWatch(stopCh) }, r.period, stopCh)
 }
 
@@ -244,19 +243,16 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 			glog.Errorf("Error during calling watch: %v", err)
 			return nil
 		}
-		glog.Infof("watch from listerWather is %v", w)
+		glog.V(4).Infof("watch from listerWather is %v", w)
 
 		if err := r.watchHandler(w, &resourceVersion, resyncCh, stopCh); err != nil {
 			if err != errorResyncRequested && err != errorStopRequested {
 				glog.Warningf("%s: watch of %v ended with: %v", r.name, r.expectedType, err)
 			}
-			if err != nil {
-				glog.Error("Error calling watchHandler: %s", err)
-			}
-			glog.Infof("returned and no more for")
+			glog.Error("Error calling watchHandler: %s. Return from for loop in ListAndWatch.", err)
 			return nil
 		}
-		glog.Info("End of for")
+		glog.V(4).Info("End of for loop in ListAndWatch.")
 	}
 }
 
@@ -292,7 +288,7 @@ loop:
 		case <-resyncCh:
 			return errorResyncRequested
 		case event, ok := <-w.ResultChan():
-			glog.Infof("%v Result Event in reflector is: %v", ok, event)
+			glog.V(4).Infof("%v Result Event in reflector is: %v", ok, event)
 			if !ok {
 				break loop
 			}

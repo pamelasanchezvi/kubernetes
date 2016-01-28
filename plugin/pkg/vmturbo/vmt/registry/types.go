@@ -154,5 +154,5 @@ type VMTEventList struct {
 	Items []VMTEvent `json:"items"`
 }
 
-func (*VMTEvent) IsAnAPIObject()     {}
-func (*VMTEventList) IsAnAPIObject() {}
+func (*VMTEvent) IsVMTObject()     {}
+func (*VMTEventList) IsVMTObject() {}

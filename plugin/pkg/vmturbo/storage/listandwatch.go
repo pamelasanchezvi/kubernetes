@@ -21,13 +21,14 @@ import (
 
 	"k8s.io/kubernetes/pkg/fields"
 	// "k8s.io/kubernetes/pkg/watch"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage/vmtruntime"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage/watch"
 
 	"github.com/golang/glog"
 )
 
 // ListFunc knows how to list resources
-type ListFunc func() (interface{}, error)
+type ListFunc func() (vmtruntime.VMTObject, error)
 
 // WatchFunc knows how to watch resources
 type WatchFunc func(resourceVersion string) (watch.Interface, error)
@@ -42,10 +43,12 @@ type ListWatch struct {
 
 // NewListWatchFromClient creates a new ListWatch from the specified client, resource, namespace and field selector.
 func NewListWatchFromStorage(s Storage, resource string, namespace string, fieldSelector fields.Selector) *ListWatch {
-	listFunc := func() (interface{}, error) {
-		var list interface{}
-		glog.Info(reflect.TypeOf(list))
-		err := s.List(resource, &list)
+	listFunc := func() (vmtruntime.VMTObject, error) {
+		return nil, nil
+
+		var list vmtruntime.VMTObject
+		glog.Infof("Type of list is %v", reflect.TypeOf(&list))
+		err := s.List(resource, list)
 		if err != nil {
 			glog.Infof("Error listing: %v", err)
 			return nil, err
@@ -61,7 +64,7 @@ func NewListWatchFromStorage(s Storage, resource string, namespace string, field
 }
 
 // List a set of apiserver resources
-func (lw *ListWatch) List() (interface{}, error) {
+func (lw *ListWatch) List() (vmtruntime.VMTObject, error) {
 	return lw.ListFunc()
 }
 

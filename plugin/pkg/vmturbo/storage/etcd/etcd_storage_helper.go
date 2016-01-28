@@ -35,6 +35,7 @@ import (
 
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/conversion"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage/vmtruntime"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage/watch"
 
 	// "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/registry"
@@ -333,7 +334,7 @@ func (h *etcdHelper) decodeNodeList(nodes []*etcd.Node, slicePtr interface{}) er
 	return nil
 }
 
-func (h *etcdHelper) List(key string, listObj interface{}) error {
+func (h *etcdHelper) List(key string, listObj vmtruntime.VMTObject) error {
 	listPtr, err := GetItemsPtr(listObj)
 	if err != nil {
 		return err
@@ -507,7 +508,7 @@ func (h *etcdHelper) prefixEtcdKey(key string) string {
 // 	}
 // }
 
-func GetItemsPtr(list interface{}) (interface{}, error) {
+func GetItemsPtr(list vmtruntime.VMTObject) (interface{}, error) {
 	v, err := conversion.EnforcePtr(list)
 	if err != nil {
 		glog.Errorf("EnforcePtr Error: %s", err)

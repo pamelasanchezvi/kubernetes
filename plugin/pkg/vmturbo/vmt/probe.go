@@ -25,7 +25,7 @@ var nodeUidTranslationMap map[string]string = make(map[string]string)
 
 var nodeName2ExternalIPMap map[string]string = make(map[string]string)
 
-var localTestingFlag bool = false
+var localTestingFlag bool = true
 
 var actionTestingFlag bool = false
 
