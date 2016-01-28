@@ -218,6 +218,8 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 
 		if err != nil {
 			if etcdError, ok := err.(*etcd.EtcdError); ok && etcdError != nil && etcdError.ErrorCode == tools.EtcdErrorCodeNotFound {
+				// glog.Errorf("Key not found Error: %v", err)
+				time.Sleep(time.Second)
 				continue
 			}
 			switch err {
@@ -235,6 +237,7 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 			if urlError, ok := err.(*url.Error); ok {
 				if opError, ok := urlError.Err.(*net.OpError); ok {
 					if errno, ok := opError.Err.(syscall.Errno); ok && errno == syscall.ECONNREFUSED {
+						glog.Warningf("Sleep, Zzzzzzzzzzzzzz")
 						time.Sleep(time.Second)
 						continue
 					}
