@@ -37,7 +37,7 @@ func (handler *KubernetesServerMessageHandler) AddTarget() {
 
 	// Add Kubernetes target.
 	// targetType, nameOrAddress, targetIdentifier, password
-	vmturboApi.AddK8sTarget(handler.meta.TargetType, handler.meta.NameOrAddress, handler.meta.TargetIdentifier, handler.meta.Password)
+	vmturboApi.AddK8sTarget(handler.meta.TargetType, handler.meta.NameOrAddress, handler.meta.Username, handler.meta.TargetIdentifier, handler.meta.Password)
 }
 
 // send an API request to make server start a discovery process on current k8s.

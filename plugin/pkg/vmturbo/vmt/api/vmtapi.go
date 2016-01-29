@@ -20,8 +20,8 @@ const (
 
 // Add a Kuberenets target to vmt ops manager
 // example : http://localhost:8400/vmturbo/api/externaltargets?
-//                     type=Kubernetes&nameOrAddress=10.10.150.2&targetIdentifier=A&password=Sysdreamworks123
-func (vmtApi *VmtApi) AddK8sTarget(targetType, nameOrAddress, targetIdentifier, password string) error {
+//                     type=Kubernetes&nameOrAddress=10.10.150.2&username=AAA&targetIdentifier=A&password=Sysdreamworks123
+func (vmtApi *VmtApi) AddK8sTarget(targetType, nameOrAddress, username, targetIdentifier, password string) error {
 	fmt.Println("---------- Inside AddTarget() ----------")
 
 	requestData := make(map[string]string)
@@ -36,6 +36,11 @@ func (vmtApi *VmtApi) AddK8sTarget(targetType, nameOrAddress, targetIdentifier, 
 	requestData["nameOrAddress"] = nameOrAddress
 	requestDataBuffer.WriteString("nameOrAddress=")
 	requestDataBuffer.WriteString(nameOrAddress)
+	requestDataBuffer.WriteString("&")
+
+	requestData["username"] = username
+	requestDataBuffer.WriteString("username=")
+	requestDataBuffer.WriteString(username)
 	requestDataBuffer.WriteString("&")
 
 	requestData["targetIdentifier"] = targetIdentifier

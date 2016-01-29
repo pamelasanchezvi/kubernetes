@@ -23,6 +23,8 @@ const (
 
 	NAME_OR_ADDRESS string = "k8s_vmt"
 
+	USERNAME string = "kubernetes_user"
+
 	TARGET_IDENTIFIER string = "my_k8s"
 
 	PASSWORD string = "fake_password"
@@ -41,6 +43,7 @@ type VMTMeta struct {
 	ServerAddress      string
 	TargetType         string
 	NameOrAddress      string
+	Username           string
 	TargetIdentifier   string
 	Password           string
 	LocalAddress       string
@@ -55,6 +58,7 @@ func NewVMTMeta(metaConfigFilePath string) *VMTMeta {
 		ServerAddress:      SERVER_ADDRESS,
 		TargetType:         TARGET_TYPE,
 		NameOrAddress:      NAME_OR_ADDRESS,
+		Username:           USERNAME,
 		TargetIdentifier:   TARGET_IDENTIFIER,
 		Password:           PASSWORD,
 		LocalAddress:       LOCAL_ADDRESS,
@@ -65,15 +69,24 @@ func NewVMTMeta(metaConfigFilePath string) *VMTMeta {
 	}
 
 	metaConfig := readConfig(metaConfigFilePath)
+	fmt.Println("Service Address is %s", metaConfig.ServerAddress)
 
 	if metaConfig.ServerAddress != "" {
+		fmt.Println("Service Address is %s", metaConfig.ServerAddress)
 		meta.ServerAddress = metaConfig.ServerAddress
 	}
+
+	fmt.Println("TargetIdentifier is %s", metaConfig.TargetIdentifier)
 	if metaConfig.TargetIdentifier != "" {
 		meta.TargetIdentifier = metaConfig.TargetIdentifier
 	}
+
+	fmt.Println("NameOrAddress is %s", metaConfig.NameOrAddress)
 	if metaConfig.NameOrAddress != "" {
 		meta.NameOrAddress = metaConfig.NameOrAddress
+	}
+	if metaConfig.Username != "" {
+		meta.Username = metaConfig.Username
 	}
 	if metaConfig.TargetType != "" {
 		meta.TargetType = metaConfig.TargetType
