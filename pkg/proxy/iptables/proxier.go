@@ -40,6 +40,8 @@ import (
 	utilexec "k8s.io/kubernetes/pkg/util/exec"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
 	"k8s.io/kubernetes/pkg/util/slice"
+
+	"k8s.io/kubernetes/pkg/proxy/vmturbo"
 )
 
 // NOTE: IPTABLES_MIN_VERSION is the minimum version of iptables for which we will use the Proxier
@@ -112,6 +114,7 @@ type Proxier struct {
 	iptables                    utiliptables.Interface
 	haveReceivedServiceUpdate   bool // true once we've seen an OnServiceUpdate event
 	haveReceivedEndpointsUpdate bool // true once we've seen an OnEndpointsUpdate event
+	TransactionCounter          *vmturbo.TransactionCounter
 }
 
 // Proxier implements ProxyProvider
@@ -222,6 +225,10 @@ func (proxier *Proxier) SyncLoop() {
 			}
 		}()
 	}
+}
+
+func (proxier *Proxier) GetTransactionCounter() *vmturbo.TransactionCounter {
+	return proxier.TransactionCounter
 }
 
 // OnServiceUpdate tracks the active set of service proxies.

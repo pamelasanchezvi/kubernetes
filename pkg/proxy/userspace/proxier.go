@@ -32,6 +32,8 @@ import (
 	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/pkg/util/errors"
 	"k8s.io/kubernetes/pkg/util/iptables"
+
+	"k8s.io/kubernetes/pkg/proxy/vmturbo"
 )
 
 type portal struct {
@@ -66,17 +68,18 @@ func logTimeout(err error) bool {
 // Proxier is a simple proxy for TCP connections between a localhost:lport
 // and services that provide the actual implementations.
 type Proxier struct {
-	loadBalancer  LoadBalancer
-	mu            sync.Mutex // protects serviceMap
-	serviceMap    map[proxy.ServicePortName]*serviceInfo
-	syncPeriod    time.Duration
-	portMapMutex  sync.Mutex
-	portMap       map[portMapKey]proxy.ServicePortName
-	numProxyLoops int32 // use atomic ops to access this; mostly for testing
-	listenIP      net.IP
-	iptables      iptables.Interface
-	hostIP        net.IP
-	proxyPorts    PortAllocator
+	loadBalancer       LoadBalancer
+	mu                 sync.Mutex // protects serviceMap
+	serviceMap         map[proxy.ServicePortName]*serviceInfo
+	syncPeriod         time.Duration
+	portMapMutex       sync.Mutex
+	portMap            map[portMapKey]proxy.ServicePortName
+	numProxyLoops      int32 // use atomic ops to access this; mostly for testing
+	listenIP           net.IP
+	iptables           iptables.Interface
+	hostIP             net.IP
+	proxyPorts         PortAllocator
+	TransactionCounter *vmturbo.TransactionCounter
 }
 
 // assert Proxier is a ProxyProvider
@@ -143,15 +146,19 @@ func createProxier(loadBalancer LoadBalancer, listenIP net.IP, iptables iptables
 	if err := iptablesFlush(iptables); err != nil {
 		return nil, fmt.Errorf("failed to flush iptables: %v", err)
 	}
+
+	transactionCounter := vmturbo.NewTransactionCounter()
+
 	return &Proxier{
-		loadBalancer: loadBalancer,
-		serviceMap:   make(map[proxy.ServicePortName]*serviceInfo),
-		portMap:      make(map[portMapKey]proxy.ServicePortName),
-		syncPeriod:   syncPeriod,
-		listenIP:     listenIP,
-		iptables:     iptables,
-		hostIP:       hostIP,
-		proxyPorts:   proxyPorts,
+		loadBalancer:       loadBalancer,
+		serviceMap:         make(map[proxy.ServicePortName]*serviceInfo),
+		portMap:            make(map[portMapKey]proxy.ServicePortName),
+		syncPeriod:         syncPeriod,
+		listenIP:           listenIP,
+		iptables:           iptables,
+		hostIP:             hostIP,
+		proxyPorts:         proxyPorts,
+		TransactionCounter: transactionCounter,
 	}, nil
 }
 
@@ -181,6 +188,10 @@ func (proxier *Proxier) SyncLoop() {
 		proxier.ensurePortals()
 		proxier.cleanupStaleStickySessions()
 	}
+}
+
+func (proxier *Proxier) GetTransactionCounter() *vmturbo.TransactionCounter {
+	return proxier.TransactionCounter
 }
 
 // Ensure that portals exist for all services.

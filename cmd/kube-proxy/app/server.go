@@ -42,6 +42,8 @@ import (
 	nodeutil "k8s.io/kubernetes/pkg/util/node"
 	"k8s.io/kubernetes/pkg/util/oom"
 
+	"k8s.io/kubernetes/pkg/proxy/vmturbo"
+
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 )
@@ -204,6 +206,8 @@ func (s *ProxyServer) Run(_ []string) error {
 			}
 		}, 5*time.Second)
 	}
+
+	vmturbo.ListenAndServeProxyServer(proxier.GetTransactionCounter())
 
 	// Just loop forever for now...
 	proxier.SyncLoop()

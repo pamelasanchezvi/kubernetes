@@ -21,6 +21,8 @@ import (
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/types"
+
+	"k8s.io/kubernetes/pkg/proxy/vmturbo"
 )
 
 // ProxyProvider is the interface provided by proxier implementations.
@@ -33,6 +35,8 @@ type ProxyProvider interface {
 	// This is expected to run as a goroutine or as the main loop of the app.
 	// It does not return.
 	SyncLoop()
+
+	GetTransactionCounter() *vmturbo.TransactionCounter
 }
 
 // ServicePortName carries a namespace + name + portname.  This is the unique

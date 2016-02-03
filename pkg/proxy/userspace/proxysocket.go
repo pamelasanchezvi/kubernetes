@@ -90,6 +90,7 @@ func tryConnect(service proxy.ServicePortName, srcAddr net.Addr, protocol string
 			return nil, err
 		}
 		glog.V(3).Infof("Mapped service %q to endpoint %s", service, endpoint)
+
 		// TODO: This could spin up a new goroutine to make the outbound connection,
 		// and keep accepting inbound traffic.
 		outConn, err := net.DialTimeout(protocol, endpoint, retryTimeout*time.Second)
@@ -100,6 +101,10 @@ func tryConnect(service proxy.ServicePortName, srcAddr net.Addr, protocol string
 			glog.Errorf("Dial failed: %v", err)
 			continue
 		}
+
+		// Count transaction.
+		// TODO: For the first time, if dial timed out, should it be handled to indicate the service is not in the map.
+		proxier.TransactionCounter.Count(service.String(), endpoint)
 		return outConn, nil
 	}
 	return nil, fmt.Errorf("failed to connect to an endpoint.")

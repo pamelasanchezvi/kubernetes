@@ -67,3 +67,6 @@ doc_tmp/
 
 # ignore vmt other config files
 plugin/pkg/vmturbo/vmt/metadata/config_nyc.json
+
+# ignore key
+yuriawskey.pem
