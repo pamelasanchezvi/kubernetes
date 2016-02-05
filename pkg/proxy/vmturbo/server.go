@@ -56,7 +56,12 @@ func (s *Server) getAllTransactions(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
+	s.resetCounter()
 	// w.Write(b)
+}
+
+func (s *Server) resetCounter() {
+	s.counter.Reset()
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {

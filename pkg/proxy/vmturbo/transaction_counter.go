@@ -16,6 +16,10 @@ func NewTransactionCounter() *TransactionCounter {
 	}
 }
 
+func (tc *TransactionCounter) Reset() {
+	tc = NewTransactionCounter()
+}
+
 func (tc *TransactionCounter) Count(serviceName, endpointAddress string) {
 	trans, ok := tc.counter[serviceName]
 	if !ok {

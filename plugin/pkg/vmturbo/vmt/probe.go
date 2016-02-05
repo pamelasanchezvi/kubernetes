@@ -3,6 +3,7 @@ package vmt
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"k8s.io/kubernetes/pkg/api"
@@ -10,7 +11,9 @@ import (
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
 
+	vmtproxy "k8s.io/kubernetes/pkg/proxy/vmturbo"
 	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/cadvisor"
+	vmtmonitor "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/monitor"
 
 	"github.com/golang/glog"
 	"github.com/google/cadvisor/info/v1"
@@ -24,6 +27,8 @@ var hostSet map[string]*vmtAdvisor.Host = make(map[string]*vmtAdvisor.Host)
 var nodeUidTranslationMap map[string]string = make(map[string]string)
 
 var nodeName2ExternalIPMap map[string]string = make(map[string]string)
+
+var pod2AppMap map[string]map[string]vmtAdvisor.Application = make(map[string]map[string]vmtAdvisor.Application)
 
 var localTestingFlag bool = false
 
@@ -158,7 +163,7 @@ func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 			ipAddress = externalIP
 		}
 		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", ipAddress)
-		glog.V(3).Infof("Parse node: The ip of vm to be reconcile with is %s", nodeIP)
+		glog.V(4).Infof("Parse node: The ip of vm to be reconcile with is %s", nodeIP)
 
 		// machineUid := node.Status.NodeInfo.MachineID
 		// entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_PHYSICAL_MACHINE, machineUid)
@@ -232,8 +237,8 @@ func (kubeProbe *KubeProbe) ParsePod(namespace string) (result []*sdk.EntityDTO,
 }
 
 // Retrieve all the pods defined in namespace
-func (kubeProbe *KubeProbe) getAllPods(namespace string) []*api.Pod {
-	var podItems []*api.Pod
+func (kubeProbe *KubeProbe) getAllPods(namespace string) map[string]*api.Pod {
+	podItems := make(map[string]*api.Pod)
 
 	podList, err := kubeProbe.kubeClient.Pods(namespace).List(labels.Everything(), fields.Everything())
 	if err != nil {
@@ -241,14 +246,14 @@ func (kubeProbe *KubeProbe) getAllPods(namespace string) []*api.Pod {
 	}
 	for _, pod := range podList.Items {
 		p := pod
-		podItems = append(podItems, &p)
+		podItems[pod.Status.PodIP] = &p
 	}
 	glog.V(3).Infof("Discovering Pods, now the cluster has " + strconv.Itoa(len(podItems)) + " pods")
 
 	return podItems
 }
 
-func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.EntityDTO, err error) {
+func (kubeProbe *KubeProbe) parsePodFromK8s(pods map[string]*api.Pod) (result []*sdk.EntityDTO, err error) {
 	glog.V(3).Infof("Now try with cAdvisor")
 
 	// First, group pods according to the ip of their hosting nodes
@@ -436,7 +441,7 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Enti
 	return
 }
 
-var pod2AppMap map[string]map[string]vmtAdvisor.Application = make(map[string]map[string]vmtAdvisor.Application)
+var podTransactionCountMap map[string]int = make(map[string]int)
 
 // Parse processes those are defined in namespace.
 func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.EntityDTO, err error) {
@@ -454,6 +459,25 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 		if len(psInfors) < 1 {
 			glog.Warningf("No process find")
 			return result, nil
+		}
+
+		transactionsCount, _ := kubeProbe.retrieveTransactoins()
+		glog.Infof("transactions are: %s", transactionsCount)
+
+		podSet := kubeProbe.getAllPods(namespace)
+		for podIPAndPort, count := range transactionsCount {
+			tempArray := strings.Split(podIPAndPort, ":")
+			if len(tempArray) < 2 {
+				continue
+			}
+			podIP := tempArray[0]
+			pod, ok := podSet[podIP]
+			if !ok {
+				glog.Errorf("Cannot link pod with IP %s in the podSet", podIP)
+				continue
+			}
+			podNameWithNamespace := pod.Namespace + "/" + pod.Name
+			podTransactionCountMap[podNameWithNamespace] = count
 		}
 
 		// Now all process info have been got. Group processes to pods
@@ -530,8 +554,14 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 				glog.V(4).Infof("Percent Cpu for %s is %f, usage is %f", dispName, app.PercentCpu, cpuUsage)
 				glog.V(4).Infof("Percent Mem for %s is %f, usage is %f", dispName, app.PercentMemory, memUsage)
 
-				transactionCapacity := float64(0)
+				transactionCapacity := float64(1000)
 				transactionUsed := float64(0)
+
+				if count, ok := podTransactionCountMap[podName]; ok {
+					transactionUsed = float64(count)
+					glog.V(3).Infof("Get transactions value of pod %s, is %f", podName, transactionUsed)
+
+				}
 
 				if actionTestingFlag {
 					transactionCapacity = float64(10000)
@@ -562,7 +592,7 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 				if externalIP, ok := nodeName2ExternalIPMap[nodeName]; ok {
 					ipAddress = externalIP
 				}
-				glog.V(3).Infof("Parse application: The ip of vm to be stitched is %s", ipAddress)
+				glog.V(4).Infof("Parse application: The ip of vm to be stitched is %s", ipAddress)
 
 				appData := &sdk.EntityDTO_ApplicationData{
 					Type:      &appType,
@@ -640,6 +670,12 @@ func (kubeProbe *KubeProbe) ParseService(namespace string, selector labels.Selec
 				for _, podID := range podIDList {
 					entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_CONTAINER_POD, appName+"::"+podID)
 					transactionBought := float64(0)
+
+					if count, ok := podTransactionCountMap[podID]; ok {
+						transactionBought = float64(count)
+						glog.V(3).Infof("Transaction bought from pod %s is %f", podID, count)
+					}
+
 					if actionTestingFlag {
 						transactionBought = float64(9999)
 					}
@@ -649,13 +685,64 @@ func (kubeProbe *KubeProbe) ParseService(namespace string, selector labels.Selec
 
 				entityDto := entityDTOBuilder.Create()
 
-				glog.V(3).Infof("created a service entityDTO", entityDto)
+				glog.V(4).Infof("created a service entityDTO %v", entityDto)
 				result = append(result, entityDto)
 			}
 		}
 	}
 
 	return
+}
+
+func (this *KubeProbe) retrieveTransactoins() (map[string]int, error) {
+	servicesTransactions, err := this.getTransactionFromAllNodes()
+	if err != nil {
+		return nil, err
+	}
+
+	ep2TransactionCountMap := make(map[string]int)
+	for _, transaction := range servicesTransactions {
+		epCounterMap := transaction.GetEndpointsCounterMap()
+		for ep, count := range epCounterMap {
+			curCount, exist := ep2TransactionCountMap[ep]
+			if !exist {
+				curCount = 0
+			}
+			curCount = curCount + count
+			ep2TransactionCountMap[ep] = curCount
+		}
+	}
+	return ep2TransactionCountMap, nil
+}
+
+func (this *KubeProbe) getTransactionFromAllNodes() (transactionInfo []vmtproxy.Transaction, err error) {
+	for nodeName, host := range hostSet {
+		transactions, err := this.getTransactionFromNode(host)
+		if err != nil {
+			glog.Errorf("error: %s", err)
+			// TODO, do not return in order to not block the discover in other host.
+			continue
+		}
+		if len(transactions) < 1 {
+			glog.Warningf("No transaction data in %s.", nodeName)
+			continue
+		}
+		glog.Infof("Transaction from %s is: %v", nodeName, transactions)
+
+		transactionInfo = append(transactionInfo, transactions...)
+	}
+	return transactionInfo, nil
+}
+
+func (this *KubeProbe) getTransactionFromNode(host *vmtAdvisor.Host) ([]vmtproxy.Transaction, error) {
+	glog.V(4).Infof("Now get transactions in host %s", host.IP)
+	monitor := &vmtmonitor.ServiceMonitor{}
+	transactions, err := monitor.GetServiceTransactions(*host)
+	if err != nil {
+		glog.Errorf("Error getting transaction data from %s: %s", host.IP, err)
+		return transactions, err
+	}
+	return transactions, nil
 }
 
 // Show container stats for each container. For debug and troubleshooting purpose.
