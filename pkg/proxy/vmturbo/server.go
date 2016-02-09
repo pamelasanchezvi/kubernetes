@@ -34,7 +34,8 @@ func NewServer(counter *TransactionCounter) Server {
 // InstallDefaultHandlers registers the default set of supported HTTP request patterns with the mux.
 func (s *Server) InstallDefaultHandlers() {
 	s.mux.HandleFunc("/", handler)
-	s.mux.HandleFunc("/transactions", s.getAllTransactions)
+	s.mux.HandleFunc("/transactions/count", s.getTransactionsCount)
+	s.mux.HandleFunc("/transactions", s.getAllTransactionsAndReset)
 }
 
 // ServeHTTP responds to HTTP requests on the Kubelet.
@@ -42,13 +43,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	s.mux.ServeHTTP(w, req)
 }
 
-func (s *Server) getAllTransactions(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getAllTransactionsAndReset(w http.ResponseWriter, r *http.Request) {
 	transactions := s.counter.GetAllTransactions()
-	// b, err := json.Marshal(transactions)
-
-	// if err != nil {
-	// 	panic(err)
-	// }
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
@@ -57,7 +53,16 @@ func (s *Server) getAllTransactions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.resetCounter()
-	// w.Write(b)
+}
+
+func (s *Server) getTransactionsCount(w http.ResponseWriter, r *http.Request) {
+	transactions := s.counter.GetAllTransactions()
+
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(transactions); err != nil {
+		panic(err)
+	}
 }
 
 func (s *Server) resetCounter() {
@@ -68,8 +73,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Vmturbo Kube-proxy Service.")
 }
 
+// TODO: For now the address and port number is hardcoded. The actual port number need to be discussed.
 func ListenAndServeProxyServer(counter *TransactionCounter) {
-	glog.Infof("start server")
+	glog.V(3).Infof("Start VMT Kube-proxy server")
 	handler := NewServer(counter)
 	s := &http.Server{
 		Addr:           net.JoinHostPort("127.0.0.1", "2222"),

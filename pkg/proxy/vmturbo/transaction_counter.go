@@ -17,7 +17,10 @@ func NewTransactionCounter() *TransactionCounter {
 }
 
 func (tc *TransactionCounter) Reset() {
-	tc = NewTransactionCounter()
+	glog.V(3).Infof("Inside reset transaction counter")
+	counterMap := make(map[string]*Transaction)
+
+	tc.counter = counterMap
 }
 
 func (tc *TransactionCounter) Count(serviceName, endpointAddress string) {
