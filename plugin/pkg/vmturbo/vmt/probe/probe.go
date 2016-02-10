@@ -1,4 +1,4 @@
-package vmt
+package probe
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
+	// "k8s.io/kubernetes/pkg/runtime"
 
 	vmtproxy "k8s.io/kubernetes/pkg/proxy/vmturbo"
 	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/cadvisor"
@@ -22,31 +23,47 @@ import (
 )
 
 var container2PodMap map[string]string = make(map[string]string)
-var hostSet map[string]*vmtAdvisor.Host = make(map[string]*vmtAdvisor.Host)
 
-var nodeUidTranslationMap map[string]string = make(map[string]string)
+// var hostSet map[string]*vmtAdvisor.Host = make(map[string]*vmtAdvisor.Host)
 
-var nodeName2ExternalIPMap map[string]string = make(map[string]string)
+// var nodeUidTranslationMap map[string]string = make(map[string]string)
+
+// var nodeName2ExternalIPMap map[string]string = make(map[string]string)
 
 var pod2AppMap map[string]map[string]vmtAdvisor.Application = make(map[string]map[string]vmtAdvisor.Application)
 
-var localTestingFlag bool = false
+var podTransactionCountMap map[string]int = make(map[string]int)
+
+var localTestingFlag bool = true
 
 var actionTestingFlag bool = false
 
 type KubeProbe struct {
-	kubeClient *client.Client
+	KubeClient *client.Client
+	NodeProbe  *NodeProbe
 }
 
-func (kubeProbe *KubeProbe) ParseNode() (result []*sdk.EntityDTO, err error) {
-	k8sNodes := kubeProbe.getAllNodes()
-	result, err = kubeProbe.parseNodeFromK8s(k8sNodes)
+// Create a new Kubernetes probe with the given kube client.
+func NewKubeProbe(kubeClient *client.Client) *KubeProbe {
+	nodeProbe := NewNodeProbe()
+	return &KubeProbe{
+		KubeClient: kubeClient,
+		NodeProbe:  nodeProbe,
+	}
+}
+
+func (this *KubeProbe) ParseNode() (result []*sdk.EntityDTO, err error) {
+	vmtNodeGetter := NewVMTNodeGetter(this.KubeClient)
+	this.NodeProbe.nodesGetter = vmtNodeGetter.GetNodes
+	k8sNodes := this.NodeProbe.GetNodes(labels.Everything(), fields.Everything())
+
+	result, err = this.parseNodeFromK8s(k8sNodes)
 	return
 }
 
 // Get all nodes
-func (kubeProbe *KubeProbe) getAllNodes() []*api.Node {
-	nodeList, err := kubeProbe.kubeClient.Nodes().List(labels.Everything(), fields.Everything())
+func (kubeProbe *KubeProbe) getAllNodes(label labels.Selector, field fields.Selector) []*api.Node {
+	nodeList, err := kubeProbe.KubeClient.Nodes().List(labels.Everything(), fields.Everything())
 	if err != nil {
 		return nil
 	}
@@ -240,7 +257,7 @@ func (kubeProbe *KubeProbe) ParsePod(namespace string) (result []*sdk.EntityDTO,
 func (kubeProbe *KubeProbe) getAllPods(namespace string) map[string]*api.Pod {
 	podItems := make(map[string]*api.Pod)
 
-	podList, err := kubeProbe.kubeClient.Pods(namespace).List(labels.Everything(), fields.Everything())
+	podList, err := kubeProbe.KubeClient.Pods(namespace).List(labels.Everything(), fields.Everything())
 	if err != nil {
 		return nil
 	}
@@ -441,8 +458,6 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods map[string]*api.Pod) (result []
 	return
 }
 
-var podTransactionCountMap map[string]int = make(map[string]int)
-
 // Parse processes those are defined in namespace.
 func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.EntityDTO, err error) {
 	glog.Infof("Has %d hosts", len(hostSet))
@@ -608,12 +623,12 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 
 // Parse Services inside Kubernetes and build entityDTO as VApp.
 func (kubeProbe *KubeProbe) ParseService(namespace string, selector labels.Selector) (result []*sdk.EntityDTO, err error) {
-	serviceList, err := kubeProbe.kubeClient.Services(namespace).List(selector)
+	serviceList, err := kubeProbe.KubeClient.Services(namespace).List(selector)
 	if err != nil {
 		return nil, fmt.Errorf("Error listing services: %s", err)
 	}
 
-	endpointList, err := kubeProbe.kubeClient.Endpoints(namespace).List(selector)
+	endpointList, err := kubeProbe.KubeClient.Endpoints(namespace).List(selector)
 	if err != nil {
 		return nil, fmt.Errorf("Error listing endpoints: %s", err)
 	}

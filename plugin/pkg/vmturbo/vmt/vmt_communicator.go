@@ -14,6 +14,7 @@ import (
 	comm "github.com/vmturbo/vmturbo-go-sdk/communicator"
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/probe"
 
 	"github.com/golang/glog"
 )
@@ -98,9 +99,7 @@ func (handler *KubernetesServerMessageHandler) DiscoverTopology(serverMsg *comm.
 		return
 	}
 
-	kubeProbe := &KubeProbe{
-		kubeClient: handler.kubeClient,
-	}
+	kubeProbe := probe.NewKubeProbe(handler.kubeClient)
 
 	nodeEntityDtos, err := kubeProbe.ParseNode()
 	if err != nil {
