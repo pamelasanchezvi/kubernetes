@@ -24,12 +24,6 @@ import (
 
 var container2PodMap map[string]string = make(map[string]string)
 
-// var hostSet map[string]*vmtAdvisor.Host = make(map[string]*vmtAdvisor.Host)
-
-// var nodeUidTranslationMap map[string]string = make(map[string]string)
-
-// var nodeName2ExternalIPMap map[string]string = make(map[string]string)
-
 var pod2AppMap map[string]map[string]vmtAdvisor.Application = make(map[string]map[string]vmtAdvisor.Application)
 
 var podTransactionCountMap map[string]int = make(map[string]int)
@@ -45,7 +39,8 @@ type KubeProbe struct {
 
 // Create a new Kubernetes probe with the given kube client.
 func NewKubeProbe(kubeClient *client.Client) *KubeProbe {
-	nodeProbe := NewNodeProbe()
+	vmtNodeGetter := NewVMTNodeGetter(kubeClient)
+	nodeProbe := NewNodeProbe(vmtNodeGetter.GetNodes)
 	return &KubeProbe{
 		KubeClient: kubeClient,
 		NodeProbe:  nodeProbe,
@@ -53,193 +48,10 @@ func NewKubeProbe(kubeClient *client.Client) *KubeProbe {
 }
 
 func (this *KubeProbe) ParseNode() (result []*sdk.EntityDTO, err error) {
-	vmtNodeGetter := NewVMTNodeGetter(this.KubeClient)
-	this.NodeProbe.nodesGetter = vmtNodeGetter.GetNodes
+
 	k8sNodes := this.NodeProbe.GetNodes(labels.Everything(), fields.Everything())
 
-	result, err = this.parseNodeFromK8s(k8sNodes)
-	return
-}
-
-// Get all nodes
-func (kubeProbe *KubeProbe) getAllNodes(label labels.Selector, field fields.Selector) []*api.Node {
-	nodeList, err := kubeProbe.KubeClient.Nodes().List(labels.Everything(), fields.Everything())
-	if err != nil {
-		return nil
-	}
-	var nodeItems []*api.Node
-	for _, node := range nodeList.Items {
-		n := node
-		nodeItems = append(nodeItems, &n)
-	}
-	glog.V(3).Infof("Discovering Nodes.. The cluster has " + strconv.Itoa(len(nodeItems)) + " nodes")
-	return nodeItems
-}
-
-// Parse each node inside K8s. Get the resources usage of each node and build the entityDTO.
-func (kubeProbe *KubeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.EntityDTO, err error) {
-	glog.V(3).Infof("---------- Now parse Node ----------")
-
-	for _, node := range nodes {
-		// First, use cAdvisor to get node info
-		//machineId := node.Status.NodeInfo.MachineID
-		var nodeIP string
-		nodeAddresses := node.Status.Addresses
-		for _, nodeAddress := range nodeAddresses {
-			// TODO Tests is needed if this is the correct address to be used.
-			if nodeAddress.Type == api.NodeLegacyHostIP {
-				nodeIP = nodeAddress.Address
-			}
-
-			if nodeAddress.Type == api.NodeExternalIP {
-				nodeName2ExternalIPMap[node.Name] = nodeAddress.Address
-			}
-		}
-
-		// use cadvisor to get machine info
-		cadvisor := &vmtAdvisor.CadvisorSource{}
-		host := &vmtAdvisor.Host{
-			IP:       nodeIP,
-			Port:     4194,
-			Resource: "",
-		}
-
-		hostSet[node.Name] = host
-
-		machineInfo, err := cadvisor.GetMachineInfo(*host)
-		if err != nil {
-			continue
-			// return nil, err
-		}
-		// The return cpu frequency is in KHz, we need MHz
-		cpuFrequency := machineInfo.CpuFrequency / 1000
-
-		// Here we only need the root container.
-		_, root, err := cadvisor.GetAllContainers(*host, time.Now(), time.Now())
-		if err != nil {
-			return nil, err
-		}
-		containerStats := root.Stats
-		// To get a valid cpu usage, there must be at least 2 valid stats.
-		if len(containerStats) < 2 {
-			glog.Warning("Not enough data")
-			continue
-			// return nil, fmt.Errorf("Not enough status data of current node %s.", nodeIP)
-		}
-		currentStat := containerStats[len(containerStats)-1]
-		prevStat := containerStats[len(containerStats)-2]
-		rawUsage := int64(currentStat.Cpu.Usage.Total - prevStat.Cpu.Usage.Total)
-		glog.V(4).Infof("rawUsage is %d", rawUsage)
-		intervalInNs := currentStat.Timestamp.Sub(prevStat.Timestamp).Nanoseconds()
-		glog.V(4).Infof("interval is %d", intervalInNs)
-		rootCurCpu := float64(rawUsage) * 1.0 / float64(intervalInNs)
-		rootCurMem := float64(currentStat.Memory.Usage) / 1024 // Mem is returned in B
-
-		// Get the node Cpu and Mem capacity.
-		nodeCpuCapacity := float64(machineInfo.NumCores) * float64(cpuFrequency)
-		nodeMemCapacity := float64(machineInfo.MemoryCapacity) / 1024 // Mem is returned in B
-		glog.V(3).Infof("Discovered node is " + node.Name)
-		glog.V(4).Infof("Node CPU capacity is %f", nodeCpuCapacity)
-		glog.V(4).Infof("Node Mem capacity is %f", nodeMemCapacity)
-
-		// Now start to build supply chain.
-		nodeEntityType := sdk.EntityDTO_VIRTUAL_MACHINE
-		id := string(node.UID)
-		dispName := node.Name
-		nodeUidTranslationMap[node.Name] = id
-		entityDTOBuilder := sdk.NewEntityDTOBuilder(nodeEntityType, id)
-
-		// Find out the used value for each commodity
-		cpuUsed := float64(rootCurCpu) * float64(cpuFrequency)
-		memUsed := float64(rootCurMem)
-
-		if localTestingFlag {
-			cpuUsed = float64(10000)
-		}
-
-		// machineUid := node.Status.NodeInfo.MachineID
-
-		// Build the entityDTO.
-		entityDTOBuilder = entityDTOBuilder.DisplayName(dispName)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_MEM_ALLOCATION, "Container").
-			Capacity(float64(nodeMemCapacity)).Used(memUsed)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_CPU_ALLOCATION, "Container").
-			Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_VMEM, id).
-			Capacity(float64(nodeMemCapacity)).Used(memUsed)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_VCPU, id).
-			Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
-
-		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
-		tmp := nodeIP
-		if localTestingFlag {
-			tmp = "10.10.173.131"
-		}
-		ipAddress := tmp
-		if externalIP, ok := nodeName2ExternalIPMap[node.Name]; ok {
-			ipAddress = externalIP
-		}
-		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", ipAddress)
-		glog.V(4).Infof("Parse node: The ip of vm to be reconcile with is %s", nodeIP)
-
-		// machineUid := node.Status.NodeInfo.MachineID
-		// entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_PHYSICAL_MACHINE, machineUid)
-		// entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU, "", cpuUsed)
-		// entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM, "", memUsed)
-
-		replacementEntityMetaDataBuilder := sdk.NewReplacementEntityMetaDataBuilder()
-		replacementEntityMetaDataBuilder.Matching(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS)
-		replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_CPU_ALLOCATION)
-		replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_MEM_ALLOCATION)
-		replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_VCPU)
-		replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_VMEM)
-		// replacementEntityMetaDataBuilder.PatchBuying(sdk.CommodityDTO_VCPU)
-		// replacementEntityMetaDataBuilder.PatchBuying(sdk.CommodityDTO_VMEM)
-
-		metaData := replacementEntityMetaDataBuilder.Build()
-
-		entityDTOBuilder = entityDTOBuilder.ReplacedBy(metaData)
-
-		entityDto := entityDTOBuilder.Create()
-		result = append(result, entityDto)
-
-		// // create a fake VM
-		// entityDTOBuilder2 := sdk.NewEntityDTOBuilder(nodeEntityType, "1.1.1.1")
-		// // Find out the used value for each commodity
-		// cpuUsed = float64(0)
-		// memUsed = float64(0)
-		// // Build the entityDTO.
-		// entityDTOBuilder2 = entityDTOBuilder2.DisplayName("1.1.1.1")
-		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_MEM_ALLOCATION, "Container").
-		// 	Capacity(float64(nodeMemCapacity)).Used(memUsed)
-		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_CPU_ALLOCATION, "Container").
-		// 	Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
-		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_VMEM, "1.1.1.1").
-		// 	Capacity(float64(nodeMemCapacity)).Used(memUsed)
-		// entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_VCPU, "1.1.1.1").
-		// 	Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
-		// entityDTOBuilder2 = entityDTOBuilder2.SetProperty("ipAddress", "10.10.173.196")
-
-		// replacementEntityMetaDataBuilder2 := sdk.NewReplacementEntityMetaDataBuilder()
-		// replacementEntityMetaDataBuilder2.Matching(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS)
-		// replacementEntityMetaDataBuilder2.PatchSelling(sdk.CommodityDTO_CPU_ALLOCATION)
-		// replacementEntityMetaDataBuilder2.PatchSelling(sdk.CommodityDTO_MEM_ALLOCATION)
-		// replacementEntityMetaDataBuilder2.PatchSelling(sdk.CommodityDTO_VCPU)
-		// replacementEntityMetaDataBuilder2.PatchSelling(sdk.CommodityDTO_VMEM)
-		// metaData2 := replacementEntityMetaDataBuilder2.Build()
-
-		// entityDTOBuilder2 = entityDTOBuilder2.ReplacedBy(metaData2)
-		// entityDto2 := entityDTOBuilder2.Create()
-		// result = append(result, entityDto2)
-	}
-
-	for _, entityDto := range result {
-		glog.V(4).Infof("Node EntityDTO: " + entityDto.GetDisplayName())
-		for _, c := range entityDto.CommoditiesSold {
-			glog.V(5).Infof("Node commodity type is " + strconv.Itoa(int(c.GetCommodityType())) + "\n")
-		}
-	}
-
+	result, err = this.NodeProbe.parseNodeFromK8s(k8sNodes)
 	return
 }
 
