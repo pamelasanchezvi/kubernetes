@@ -114,20 +114,29 @@ func (tcp *tcpProxySocket) ProxyLoop(service proxy.ServicePortName, myInfo *serv
 	for {
 		if info, exists := proxier.getServiceInfo(service); !exists || info != myInfo {
 			// The service port was closed or replaced.
+			glog.Info("!!!!!service port was closed or replaced!!")
 			return
 		}
 		// Block until a connection is made.
+		glog.Info("!!!!!Accepting TCP connection!!")
+
 		inConn, err := tcp.Accept()
 		if err != nil {
+			glog.Errorf("This is error!!!!!!! %v", err)
+
 			if isTooManyFDsError(err) {
 				panic("Accept failed: " + err.Error())
 			}
 
 			if isClosedError(err) {
+				glog.Info("!!!!!Closed Error!!")
+
 				return
 			}
 			if info, exists := proxier.getServiceInfo(service); !exists || info != myInfo {
 				// Then the service port was just closed so the accept failure is to be expected.
+				glog.Info("!!!!!Service Info Error!!")
+
 				return
 			}
 			glog.Errorf("Accept failed: %v", err)

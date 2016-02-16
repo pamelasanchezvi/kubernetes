@@ -24,11 +24,11 @@ func (cmb *ClientMessageBuilder) Create() *MediationClientMessage {
 	return cmb.clientMessage
 }
 
-// Set the ContainerInfo of the ClientMessage if necessary.
-func (cmb *ClientMessageBuilder) SetContainerInfo(containerInfo *ContainerInfo) *ClientMessageBuilder {
-	cmb.clientMessage.ContainerInfo = containerInfo
-	return cmb
-}
+// // Set the ContainerInfo of the ClientMessage if necessary.
+// func (cmb *ClientMessageBuilder) SetContainerInfo(containerInfo *ContainerInfo) *ClientMessageBuilder {
+// 	cmb.clientMessage.ContainerInfo = containerInfo
+// 	return cmb
+// }
 
 // set the validation response
 func (cmb *ClientMessageBuilder) SetValidationResponse(validationResponse *ValidationResponse) *ClientMessageBuilder {

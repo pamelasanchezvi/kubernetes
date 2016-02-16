@@ -146,9 +146,9 @@ func (nodeProbe *NodeProbe) getHost(nodeName string) *vmtAdvisor.Host {
 	return host
 }
 
-func (this *NodeProbe) getNodeUidFromName(nodeName string) string {
+// func (this *NodeProbe) getNodeUidFromName(nodeName string) string {
 
-}
+// }
 
 // Retrieve the legacyHostIP of each node and put other IPs to related maps.
 func (nodeProbe *NodeProbe) parseNodeIP(node *api.Node) {
@@ -182,11 +182,11 @@ func (this *NodeProbe) getNodeIPWithType(nodeName string, ipType api.NodeAddress
 
 func (nodeProbe *NodeProbe) buildVMEntityDTO(nodeID, displayName string, commoditiesSold []*sdk.CommodityDTO) *sdk.EntityDTO {
 	entityDTOBuilder := sdk.NewEntityDTOBuilder(sdk.EntityDTO_VIRTUAL_MACHINE, nodeID)
-
+	entityDTOBuilder.DisplayName(displayName)
 	entityDTOBuilder.SellsCommodities(commoditiesSold)
 
 	ipAddress := nodeProbe.getIPForStitching(displayName)
-	entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", ipAddress)
+	entityDTOBuilder = entityDTOBuilder.SetProperty("IP", ipAddress)
 	glog.V(4).Infof("Parse node: The ip of vm to be reconcile with is %s", ipAddress)
 
 	metaData := nodeProbe.generateReconcilationMetaData()
@@ -201,7 +201,7 @@ func (nodeProbe *NodeProbe) buildVMEntityDTO(nodeID, displayName string, commodi
 // Create the meta data that will be used during the reconcilation process.
 func (nodeProbe *NodeProbe) generateReconcilationMetaData() *sdk.EntityDTO_ReplacementEntityMetaData {
 	replacementEntityMetaDataBuilder := sdk.NewReplacementEntityMetaDataBuilder()
-	replacementEntityMetaDataBuilder.Matching(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS)
+	replacementEntityMetaDataBuilder.Matching("IP")
 	replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_CPU_ALLOCATION)
 	replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_MEM_ALLOCATION)
 	replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_VCPU)
@@ -318,7 +318,7 @@ func (this *NodeProbe) buildFakeVMEntityDTO() *sdk.EntityDTO {
 		Capacity(float64(nodeMemCapacity)).Used(memUsed)
 	entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_VCPU, "1.1.1.1").
 		Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
-	entityDTOBuilder2 = entityDTOBuilder2.SetProperty("ipAddress", "10.10.173.196")
+	entityDTOBuilder2 = entityDTOBuilder2.SetProperty("IP", "10.10.173.196")
 
 	metaData2 := this.generateReconcilationMetaData()
 

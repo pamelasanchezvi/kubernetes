@@ -217,12 +217,12 @@ func (vmtcomm *VMTCommunicator) RegisterKubernetes() {
 		Probes: probes,
 	}
 
-	messageID := int32(1)
+	// messageID := int32(1)
 
-	// 6. build client message.
-	clientMsg := comm.NewClientMessageBuilder(messageID).SetContainerInfo(containerInfo).Create()
+	// // 6. build client message.
+	// clientMsg := comm.NewClientMessageBuilder(messageID).SetContainerInfo(containerInfo).Create()
 
-	vmtcomm.wsComm.RegisterAndListen(clientMsg)
+	vmtcomm.wsComm.RegisterAndListen(containerInfo)
 }
 
 // TODO, rephrase comment.
@@ -363,8 +363,8 @@ func createSupplyChain() []*sdk.TemplateDTO {
 	// Link from Pod to VM
 	vmPodExtLinkBuilder := sdk.NewExternalEntityLinkBuilder()
 	vmPodExtLinkBuilder.Link(sdk.EntityDTO_CONTAINER_POD, sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_LAYERED_OVER).
-		Commodity(cpuAllocationType).
-		Commodity(memAllocationType).
+		Commodity(cpuAllocationType, true).
+		Commodity(memAllocationType, true).
 		ProbeEntityPropertyDef(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS, "IP Address where the Pod is running").
 		ExternalEntityPropertyDef(sdk.VM_IP)
 
@@ -373,8 +373,8 @@ func createSupplyChain() []*sdk.TemplateDTO {
 	// Link from Application to VM
 	vmAppExtLinkBuilder := sdk.NewExternalEntityLinkBuilder()
 	vmAppExtLinkBuilder.Link(sdk.EntityDTO_APPLICATION, sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_HOSTING).
-		Commodity(vCpuType).
-		Commodity(vMemType).
+		Commodity(vCpuType, true).
+		Commodity(vMemType, true).
 		ProbeEntityPropertyDef(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS, "IP Address where the Application is running").
 		ExternalEntityPropertyDef(sdk.VM_IP)
 
