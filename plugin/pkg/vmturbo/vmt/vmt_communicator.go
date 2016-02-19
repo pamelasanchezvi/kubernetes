@@ -275,7 +275,8 @@ func createSupplyChain() []*sdk.TemplateDTO {
 		Selling(sdk.CommodityDTO_CPU_ALLOCATION).
 		Selling(sdk.CommodityDTO_MEM_ALLOCATION).
 		Selling(sdk.CommodityDTO_VCPU).
-		Selling(sdk.CommodityDTO_VMEM)
+		Selling(sdk.CommodityDTO_VMEM).
+		Selling(sdk.CommodityDTO_APPLICATION)
 
 	emptyKey := ""
 	// cpuType := sdk.CommodityDTO_CPU
@@ -344,7 +345,12 @@ func createSupplyChain() []*sdk.TemplateDTO {
 		Key:           &emptyKey,
 		CommodityType: &vMemType,
 	}
-	appSupplyChainNodeBuilder = appSupplyChainNodeBuilder.Provider(sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_HOSTING).Buys(*appVCpu).Buys(*appVMem)
+	appCommType := sdk.CommodityDTO_APPLICATION
+	appAppComm := &sdk.TemplateCommodity{
+		Key:           &emptyKey,
+		CommodityType: &appCommType,
+	}
+	appSupplyChainNodeBuilder = appSupplyChainNodeBuilder.Provider(sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_HOSTING).Buys(*appVCpu).Buys(*appVMem).Buys(*appAppComm)
 
 	// Application supplychain builder
 	vAppSupplyChainNodeBuilder := sdk.NewSupplyChainNodeBuilder()
@@ -375,6 +381,7 @@ func createSupplyChain() []*sdk.TemplateDTO {
 	vmAppExtLinkBuilder.Link(sdk.EntityDTO_APPLICATION, sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_HOSTING).
 		Commodity(vCpuType, true).
 		Commodity(vMemType, true).
+		Commodity(appCommType, true).
 		ProbeEntityPropertyDef(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS, "IP Address where the Application is running").
 		ExternalEntityPropertyDef(sdk.VM_IP)
 

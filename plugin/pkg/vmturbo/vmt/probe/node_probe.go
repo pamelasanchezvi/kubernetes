@@ -115,6 +115,10 @@ func (nodeProbe *NodeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 			Used(nodeResourceStat.vCpuUsed).
 			Create()
 		commoditiesSold = append(commoditiesSold, vCpuComm)
+		appComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_APPLICATION).
+			Key(nodeID).
+			Create()
+		commoditiesSold = append(commoditiesSold, appComm)
 
 		entityDto := nodeProbe.buildVMEntityDTO(nodeID, dispName, commoditiesSold)
 
@@ -206,6 +210,7 @@ func (nodeProbe *NodeProbe) generateReconcilationMetaData() *sdk.EntityDTO_Repla
 	replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_MEM_ALLOCATION)
 	replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_VCPU)
 	replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_VMEM)
+	replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_APPLICATION)
 	// replacementEntityMetaDataBuilder.PatchBuying(sdk.CommodityDTO_VCPU)
 	// replacementEntityMetaDataBuilder.PatchBuying(sdk.CommodityDTO_VMEM)
 

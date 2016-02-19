@@ -28,7 +28,7 @@ var pod2AppMap map[string]map[string]vmtAdvisor.Application = make(map[string]ma
 
 var podTransactionCountMap map[string]int = make(map[string]int)
 
-var localTestingFlag bool = true
+var localTestingFlag bool = false
 
 var actionTestingFlag bool = false
 
@@ -405,7 +405,10 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 				entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, providerUid)
 				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VCPU, providerUid, cpuUsage)
 				entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_VMEM, providerUid, memUsage)
-
+				appComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_APPLICATION).
+					Key(providerUid).
+					Create()
+				entityDTOBuilder = entityDTOBuilder.BuysCommodity(appComm)
 				// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 
 				entityDto := entityDTOBuilder.Create()
