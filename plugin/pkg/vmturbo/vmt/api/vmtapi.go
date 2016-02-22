@@ -70,7 +70,7 @@ func (vmtApi *VmtApi) AddK8sTarget(targetType, nameOrAddress, username, targetId
 // Discover a target using api
 // http://localhost:8400/vmturbo/api/targets/k8s_vmt
 func (vmtApi *VmtApi) DiscoverTarget(nameOrAddress string) error {
-	fmt.Println("---------- Inside DiscoverTarget() ----------")
+	glog.V(4).Info("---------- Inside DiscoverTarget() ----------")
 
 	postResponse, err := vmtApi.apiPost("/targets/"+nameOrAddress, "")
 	if err != nil {
@@ -88,14 +88,14 @@ func (vmtApi *VmtApi) DiscoverTarget(nameOrAddress string) error {
 // Create the reservation specification and
 // return map which has pod name as key and node name as value
 func (vmtApi *VmtApi) RequestPlacement(requestSpec, filterProperties map[string]string) (map[string]string, error) {
-	fmt.Println("---------- Inside RequestPlacement ----------")
+	glog.V(4).Info("---------- Inside RequestPlacement ----------")
 
 	requestData := make(map[string]string)
 
 	var requestDataBuffer bytes.Buffer
 
 	if reservation_name, ok := requestSpec["reservation_name"]; !ok {
-		fmt.Println("---------- reservation name is not registered ----------")
+		glog.Errorf("---------- reservation name is not registered ----------")
 		return nil, fmt.Errorf("reservation_name has not been registered.")
 	} else {
 		requestData["reservationName"] = reservation_name
@@ -105,7 +105,7 @@ func (vmtApi *VmtApi) RequestPlacement(requestSpec, filterProperties map[string]
 	}
 
 	if num_instances, ok := requestSpec["num_instances"]; !ok {
-		fmt.Println("---------- num_instances not registered ----------")
+		glog.Errorf("---------- num_instances not registered ----------")
 		return nil, fmt.Errorf("num_instances has not been registered.")
 	} else {
 		requestData["count"] = num_instances
@@ -115,7 +115,7 @@ func (vmtApi *VmtApi) RequestPlacement(requestSpec, filterProperties map[string]
 	}
 
 	if template_name, ok := requestSpec["template_name"]; !ok {
-		fmt.Println("---------- template name is not registered ----------")
+		glog.Errorf("---------- template name is not registered ----------")
 		return nil, fmt.Errorf("template_name has not been registered.")
 	} else {
 		requestData["templateName"] = template_name
@@ -125,7 +125,7 @@ func (vmtApi *VmtApi) RequestPlacement(requestSpec, filterProperties map[string]
 	}
 
 	if deployment_profile, ok := requestSpec["deployment_profile"]; !ok {
-		fmt.Println("---------- deployment profile is not registered ----------")
+		glog.Errorf("---------- deployment profile is not registered ----------")
 		//return nil, fmt.Errorf("deployment_profile has not been registered.")
 	} else {
 		requestData["deploymentProfile"] = deployment_profile
@@ -166,11 +166,11 @@ func (vmtApi *VmtApi) RequestPlacement(requestSpec, filterProperties map[string]
 // call vmturbo api. return response
 func (vmtApi *VmtApi) apiPost(postUrl, requestDataString string) (*http.Response, error) {
 	fullUrl := "http://" + vmtApi.vmtUrl + "/vmturbo/api" + postUrl + requestDataString
-	fmt.Println("The full Url is ", fullUrl)
+	glog.V(4).Info("The full Url is ", fullUrl)
 	req, err := http.NewRequest("POST", fullUrl, nil)
 
 	req.SetBasicAuth(vmtApi.extConfig["Username"], vmtApi.extConfig["Password"])
-	fmt.Println(req)
+	glog.V(4).Info(req)
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -188,11 +188,11 @@ func (vmtApi *VmtApi) apiPost(postUrl, requestDataString string) (*http.Response
 // call vmturbo api. return response
 func (vmtApi *VmtApi) apiGet(getUrl string) (*http.Response, error) {
 	fullUrl := "http://" + vmtApi.vmtUrl + "/vmturbo/api" + getUrl
-	fmt.Println("The full Url is ", fullUrl)
+	glog.V(4).Info("The full Url is ", fullUrl)
 	req, err := http.NewRequest("POST", fullUrl, nil)
 
 	req.SetBasicAuth(vmtApi.extConfig["Username"], vmtApi.extConfig["Password"])
-	fmt.Println(req)
+	glog.V(4).Info(req)
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {

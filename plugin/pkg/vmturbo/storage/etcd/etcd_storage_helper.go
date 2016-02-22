@@ -175,7 +175,7 @@ func (h *etcdHelper) Delete(key string, out interface{}) error {
 	// 		_, _, err = h.extractObj(response, err, out, false, true)
 	// 	}
 	// }
-	glog.Infof("Delete response is: %s", response)
+	glog.V(3).Infof("Delete response is: %v", response)
 	return err
 }
 

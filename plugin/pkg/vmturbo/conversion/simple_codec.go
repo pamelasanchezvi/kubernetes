@@ -102,8 +102,6 @@ func (c *SimpleCodec) NewObject(kind string) (interface{}, error) {
 // Returns an error if this is not possible.
 func EnforcePtr(obj interface{}) (reflect.Value, error) {
 	v := reflect.ValueOf(obj)
-	glog.V(3).Infof("Value is %v.", v)
-	glog.V(3).Infof("Type is %s.", reflect.TypeOf(v))
 	if v.Kind() != reflect.Ptr {
 		if v.Kind() == reflect.Invalid {
 			return reflect.Value{}, fmt.Errorf("expected pointer, but got invalid kind")

@@ -28,7 +28,7 @@ var pod2AppMap map[string]map[string]vmtAdvisor.Application = make(map[string]ma
 
 var podTransactionCountMap map[string]int = make(map[string]int)
 
-var localTestingFlag bool = false
+var localTestingFlag bool = true
 
 var actionTestingFlag bool = false
 
@@ -48,7 +48,6 @@ func NewKubeProbe(kubeClient *client.Client) *KubeProbe {
 }
 
 func (this *KubeProbe) ParseNode() (result []*sdk.EntityDTO, err error) {
-
 	k8sNodes := this.NodeProbe.GetNodes(labels.Everything(), fields.Everything())
 
 	result, err = this.NodeProbe.parseNodeFromK8s(k8sNodes)

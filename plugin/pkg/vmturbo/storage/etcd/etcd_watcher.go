@@ -318,37 +318,37 @@ func (w *etcdWatcher) sendAdd(res *etcd.Response) {
 // 	// Do nothing if neither new nor old object passed the filter.
 // }
 
-// func (w *etcdWatcher) sendDelete(res *etcd.Response) {
-// 	if res.PrevNode == nil {
-// 		glog.Errorf("unexpected nil prev node: %#v", res)
-// 		return
-// 	}
-// 	if w.include != nil && !w.include(res.PrevNode.Key) {
-// 		return
-// 	}
-// 	node := *res.PrevNode
-// 	if res.Node != nil {
-// 		// Note that this sends the *old* object with the etcd index for the time at
-// 		// which it gets deleted. This will allow users to restart the watch at the right
-// 		// index.
-// 		node.ModifiedIndex = res.Node.ModifiedIndex
-// 	}
-// 	obj, err := w.decodeObject(&node)
-// 	if err != nil {
-// 		glog.Errorf("failure to decode api object: '%v' from %#v %#v", string(res.PrevNode.Value), res, res.PrevNode)
-// 		// TODO: expose an error through watch.Interface?
-// 		// Ignore this value. If we stop the watch on a bad value, a client that uses
-// 		// the resourceVersion to resume will never be able to get past a bad value.
-// 		return
-// 	}
-// 	if !w.filter(obj) {
-// 		return
-// 	}
-// 	w.emit(watch.Event{
-// 		Type:   watch.Deleted,
-// 		Object: obj,
-// 	})
-// }
+func (w *etcdWatcher) sendDelete(res *etcd.Response) {
+	if res.PrevNode == nil {
+		glog.Errorf("unexpected nil prev node: %#v", res)
+		return
+	}
+	if w.include != nil && !w.include(res.PrevNode.Key) {
+		return
+	}
+	node := *res.PrevNode
+	if res.Node != nil {
+		// Note that this sends the *old* object with the etcd index for the time at
+		// which it gets deleted. This will allow users to restart the watch at the right
+		// index.
+		node.ModifiedIndex = res.Node.ModifiedIndex
+	}
+	obj, err := w.decodeObject(&node)
+	if err != nil {
+		glog.Errorf("failure to decode api object: '%v' from %#v %#v", string(res.PrevNode.Value), res, res.PrevNode)
+		// TODO: expose an error through watch.Interface?
+		// Ignore this value. If we stop the watch on a bad value, a client that uses
+		// the resourceVersion to resume will never be able to get past a bad value.
+		return
+	}
+	// if !w.filter(obj) {
+	// 	return
+	// }
+	w.emit(watch.Event{
+		Type:   watch.Deleted,
+		Object: obj,
+	})
+}
 
 func (w *etcdWatcher) sendResult(res *etcd.Response) {
 	switch res.Action {
@@ -356,8 +356,8 @@ func (w *etcdWatcher) sendResult(res *etcd.Response) {
 		w.sendAdd(res)
 	// case EtcdSet, EtcdCAS:
 	// 	w.sendModify(res)
-	// case EtcdDelete:
-	// 	w.sendDelete(res)
+	case EtcdDelete:
+		w.sendDelete(res)
 	default:
 		glog.Errorf("unknown action: %v", res.Action)
 	}
