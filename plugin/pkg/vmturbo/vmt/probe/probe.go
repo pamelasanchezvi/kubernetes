@@ -134,6 +134,9 @@ func (kubeProbe *KubeProbe) parsePodFromK8s(pods map[string]*api.Pod) (result []
 				// TODO! hardcoded here. Works but not good. Maybe can find better solution?
 				// The value returned here is namespace/podname
 				if podName, ok := container.Spec.Labels["io.kubernetes.pod.name"]; ok {
+					if podNamespace, hasNamespace := container.Spec.Labels["io.kubernetes.pod.namespace"]; hasNamespace {
+						podName = podNamespace + "/" + podName
+					}
 					glog.V(4).Infof("Container %s is in Pod %s", container.Name, podName)
 					var containers []*vmtAdvisor.Container
 					if ctns, exist := podContainers[podName]; exist {
