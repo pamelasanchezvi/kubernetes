@@ -269,16 +269,17 @@ func createAccountDefKubernetes() []*comm.AccountDefEntry {
 func createSupplyChain() []*sdk.TemplateDTO {
 	glog.V(3).Infof(".......... Now use builder to create a supply chain ..........")
 
+	fakeKey := "fake"
+
 	minionSupplyChainNodeBuilder := sdk.NewSupplyChainNodeBuilder()
 	minionSupplyChainNodeBuilder = minionSupplyChainNodeBuilder.
 		Entity(sdk.EntityDTO_VIRTUAL_MACHINE).
-		Selling(sdk.CommodityDTO_CPU_ALLOCATION).
-		Selling(sdk.CommodityDTO_MEM_ALLOCATION).
-		Selling(sdk.CommodityDTO_VCPU).
-		Selling(sdk.CommodityDTO_VMEM).
-		Selling(sdk.CommodityDTO_APPLICATION)
+		Selling(sdk.CommodityDTO_CPU_ALLOCATION, fakeKey).
+		Selling(sdk.CommodityDTO_MEM_ALLOCATION, fakeKey).
+		Selling(sdk.CommodityDTO_VCPU, fakeKey).
+		Selling(sdk.CommodityDTO_VMEM, fakeKey).
+		Selling(sdk.CommodityDTO_APPLICATION, fakeKey)
 
-	emptyKey := ""
 	// cpuType := sdk.CommodityDTO_CPU
 	// cpuTemplateComm := &sdk.TemplateCommodity{
 	// 	Key:           &emptyKey,
@@ -299,17 +300,17 @@ func createSupplyChain() []*sdk.TemplateDTO {
 	podSupplyChainNodeBuilder := sdk.NewSupplyChainNodeBuilder()
 	podSupplyChainNodeBuilder = podSupplyChainNodeBuilder.
 		Entity(sdk.EntityDTO_CONTAINER_POD).
-		Selling(sdk.CommodityDTO_CPU_ALLOCATION).
-		Selling(sdk.CommodityDTO_MEM_ALLOCATION)
+		Selling(sdk.CommodityDTO_CPU_ALLOCATION, fakeKey).
+		Selling(sdk.CommodityDTO_MEM_ALLOCATION, fakeKey)
 
 	cpuAllocationType := sdk.CommodityDTO_CPU_ALLOCATION
 	cpuAllocationTemplateComm := &sdk.TemplateCommodity{
-		Key:           &emptyKey,
+		Key:           &fakeKey,
 		CommodityType: &cpuAllocationType,
 	}
 	memAllocationType := sdk.CommodityDTO_MEM_ALLOCATION
 	memAllocationTemplateComm := &sdk.TemplateCommodity{
-		Key:           &emptyKey,
+		Key:           &fakeKey,
 		CommodityType: &memAllocationType,
 	}
 
@@ -323,31 +324,31 @@ func createSupplyChain() []*sdk.TemplateDTO {
 	appSupplyChainNodeBuilder := sdk.NewSupplyChainNodeBuilder()
 	appSupplyChainNodeBuilder = appSupplyChainNodeBuilder.
 		Entity(sdk.EntityDTO_APPLICATION).
-		Selling(sdk.CommodityDTO_TRANSACTION)
+		Selling(sdk.CommodityDTO_TRANSACTION, fakeKey)
 	// Buys CpuAllocation/MemAllocation from Pod
 	appCpuAllocationTemplateComm := &sdk.TemplateCommodity{
-		Key:           &emptyKey,
+		Key:           &fakeKey,
 		CommodityType: &cpuAllocationType,
 	}
 	appMemAllocationTemplateComm := &sdk.TemplateCommodity{
-		Key:           &emptyKey,
+		Key:           &fakeKey,
 		CommodityType: &memAllocationType,
 	}
 	appSupplyChainNodeBuilder = appSupplyChainNodeBuilder.Provider(sdk.EntityDTO_CONTAINER_POD, sdk.Provider_LAYERED_OVER).Buys(*appCpuAllocationTemplateComm).Buys(*appMemAllocationTemplateComm)
 	// Buys VCpu and VMem from VM
 	vCpuType := sdk.CommodityDTO_VCPU
 	appVCpu := &sdk.TemplateCommodity{
-		Key:           &emptyKey,
+		Key:           &fakeKey,
 		CommodityType: &vCpuType,
 	}
 	vMemType := sdk.CommodityDTO_VMEM
 	appVMem := &sdk.TemplateCommodity{
-		Key:           &emptyKey,
+		Key:           &fakeKey,
 		CommodityType: &vMemType,
 	}
 	appCommType := sdk.CommodityDTO_APPLICATION
 	appAppComm := &sdk.TemplateCommodity{
-		Key:           &emptyKey,
+		Key:           &fakeKey,
 		CommodityType: &appCommType,
 	}
 	appSupplyChainNodeBuilder = appSupplyChainNodeBuilder.Provider(sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_HOSTING).Buys(*appVCpu).Buys(*appVMem).Buys(*appAppComm)
@@ -361,7 +362,7 @@ func createSupplyChain() []*sdk.TemplateDTO {
 
 	// Buys CpuAllocation/MemAllocation from Pod
 	transactionTemplateComm := &sdk.TemplateCommodity{
-		Key:           &emptyKey,
+		Key:           &fakeKey,
 		CommodityType: &transactionType,
 	}
 	vAppSupplyChainNodeBuilder = vAppSupplyChainNodeBuilder.Provider(sdk.EntityDTO_APPLICATION, sdk.Provider_LAYERED_OVER).Buys(*transactionTemplateComm)
