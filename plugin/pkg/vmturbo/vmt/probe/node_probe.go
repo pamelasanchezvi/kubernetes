@@ -80,8 +80,6 @@ func (nodeProbe *NodeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		nodeProbe.parseNodeIP(node)
 		hostSet[node.Name] = nodeProbe.getHost(node.Name)
 
-		nodeResourceStat := nodeProbe.getNodeResourceStat(node)
-
 		// // Now start to build supply chain.
 		// nodeEntityType := sdk.EntityDTO_VIRTUAL_MACHINE
 		nodeID := string(node.UID)
@@ -89,37 +87,7 @@ func (nodeProbe *NodeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		nodeUidTranslationMap[node.Name] = nodeID
 		// entityDTOBuilder := sdk.NewEntityDTOBuilder(nodeEntityType, id)
 
-		var commoditiesSold []*sdk.CommodityDTO
-		//TODO: create const value for keys
-		memAllocationComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_MEM_ALLOCATION).
-			Key("Container").
-			Capacity(float64(nodeResourceStat.memAllocationCapacity)).
-			Used(nodeResourceStat.memAllocationUsed).
-			Create()
-		commoditiesSold = append(commoditiesSold, memAllocationComm)
-		cpuAllocationComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_CPU_ALLOCATION).
-			Key("Container").
-			Capacity(float64(nodeResourceStat.cpuAllocationCapacity)).
-			Used(nodeResourceStat.cpuAllocationUsed).
-			Create()
-		commoditiesSold = append(commoditiesSold, cpuAllocationComm)
-		vMemComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_VMEM).
-			Key(nodeID).
-			Capacity(nodeResourceStat.vMemCapacity).
-			Used(nodeResourceStat.vMemUsed).
-			Create()
-		commoditiesSold = append(commoditiesSold, vMemComm)
-		vCpuComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_VCPU).
-			Key(nodeID).
-			Capacity(float64(nodeResourceStat.vCpuCapacity)).
-			Used(nodeResourceStat.vCpuUsed).
-			Create()
-		commoditiesSold = append(commoditiesSold, vCpuComm)
-		appComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_APPLICATION).
-			Key(nodeID).
-			Create()
-		commoditiesSold = append(commoditiesSold, appComm)
-
+		commoditiesSold := nodeProbe.createCommoditySold(node)
 		entityDto := nodeProbe.buildVMEntityDTO(nodeID, dispName, commoditiesSold)
 
 		result = append(result, entityDto)
@@ -133,6 +101,44 @@ func (nodeProbe *NodeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 	}
 
 	return
+}
+
+func (nodeProbe *NodeProbe) createCommoditySold(node *api.Node) []*sdk.CommodityDTO {
+	nodeResourceStat := nodeProbe.getNodeResourceStat(node)
+	nodeID := string(node.UID)
+
+	var commoditiesSold []*sdk.CommodityDTO
+	//TODO: create const value for keys
+	memAllocationComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_MEM_ALLOCATION).
+		Key("Container").
+		Capacity(float64(nodeResourceStat.memAllocationCapacity)).
+		Used(nodeResourceStat.memAllocationUsed).
+		Create()
+	commoditiesSold = append(commoditiesSold, memAllocationComm)
+	cpuAllocationComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_CPU_ALLOCATION).
+		Key("Container").
+		Capacity(float64(nodeResourceStat.cpuAllocationCapacity)).
+		Used(nodeResourceStat.cpuAllocationUsed).
+		Create()
+	commoditiesSold = append(commoditiesSold, cpuAllocationComm)
+	vMemComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_VMEM).
+		Key(nodeID).
+		Capacity(nodeResourceStat.vMemCapacity).
+		Used(nodeResourceStat.vMemUsed).
+		Create()
+	commoditiesSold = append(commoditiesSold, vMemComm)
+	vCpuComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_VCPU).
+		Key(nodeID).
+		Capacity(float64(nodeResourceStat.vCpuCapacity)).
+		Used(nodeResourceStat.vCpuUsed).
+		Create()
+	commoditiesSold = append(commoditiesSold, vCpuComm)
+	appComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_APPLICATION).
+		Key(nodeID).
+		Create()
+	commoditiesSold = append(commoditiesSold, appComm)
+
+	return commoditiesSold
 }
 
 func (nodeProbe *NodeProbe) getHost(nodeName string) *vmtAdvisor.Host {
