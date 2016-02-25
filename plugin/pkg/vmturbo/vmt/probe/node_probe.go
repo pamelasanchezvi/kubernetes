@@ -24,6 +24,9 @@ var nodeUidTranslationMap map[string]string = make(map[string]string)
 
 var nodeName2ExternalIPMap map[string]string = make(map[string]string)
 
+// A map stores the CPU frequency of each node. Key is node name, value is CPU frequency.
+var nodeFrequencyMap map[string]uint64 = make(map[string]uint64)
+
 type NodeProbe struct {
 	nodesGetter NodesGetter
 	nodeIPMap   map[string]map[api.NodeAddressType]string
@@ -76,16 +79,13 @@ func (nodeProbe *NodeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 
 	for _, node := range nodes {
 		// First, use cAdvisor to get node info
-		//machineId := node.Status.NodeInfo.MachineID
 		nodeProbe.parseNodeIP(node)
 		hostSet[node.Name] = nodeProbe.getHost(node.Name)
 
 		// // Now start to build supply chain.
-		// nodeEntityType := sdk.EntityDTO_VIRTUAL_MACHINE
 		nodeID := string(node.UID)
 		dispName := node.Name
 		nodeUidTranslationMap[node.Name] = nodeID
-		// entityDTOBuilder := sdk.NewEntityDTOBuilder(nodeEntityType, id)
 
 		commoditiesSold := nodeProbe.createCommoditySold(node)
 		entityDto := nodeProbe.buildVMEntityDTO(nodeID, dispName, commoditiesSold)
@@ -252,6 +252,7 @@ func (this *NodeProbe) getNodeResourceStat(node *api.Node) *NodeResourceStat {
 	}
 	// The return cpu frequency is in KHz, we need MHz
 	cpuFrequency := machineInfo.CpuFrequency / 1000
+	nodeFrequencyMap[node.Name] = cpuFrequency
 
 	// Here we only need the root container.
 	_, root, err := cadvisor.GetAllContainers(*host, time.Now(), time.Now())

@@ -2,9 +2,8 @@ package probe
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
-	"time"
+	// "time"
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client"
@@ -17,12 +16,10 @@ import (
 	vmtmonitor "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/monitor"
 
 	"github.com/golang/glog"
-	"github.com/google/cadvisor/info/v1"
+	// "github.com/google/cadvisor/info/v1"
 	info "github.com/google/cadvisor/info/v2"
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"
 )
-
-var container2PodMap map[string]string = make(map[string]string)
 
 var pod2AppMap map[string]map[string]vmtAdvisor.Application = make(map[string]map[string]vmtAdvisor.Application)
 
@@ -35,15 +32,20 @@ var actionTestingFlag bool = false
 type KubeProbe struct {
 	KubeClient *client.Client
 	NodeProbe  *NodeProbe
+	PodProbe   *PodProbe
 }
 
 // Create a new Kubernetes probe with the given kube client.
 func NewKubeProbe(kubeClient *client.Client) *KubeProbe {
 	vmtNodeGetter := NewVMTNodeGetter(kubeClient)
 	nodeProbe := NewNodeProbe(vmtNodeGetter.GetNodes)
+
+	vmtPodGetter := NewVMTPodGetter(kubeClient)
+	podProbe := NewPodProbe(vmtPodGetter.GetPods)
 	return &KubeProbe{
 		KubeClient: kubeClient,
 		NodeProbe:  nodeProbe,
+		PodProbe:   podProbe,
 	}
 }
 
@@ -55,221 +57,17 @@ func (this *KubeProbe) ParseNode() (result []*sdk.EntityDTO, err error) {
 }
 
 // Parse pods those are defined in namespace.
-func (kubeProbe *KubeProbe) ParsePod(namespace string) (result []*sdk.EntityDTO, err error) {
-	k8sPods := kubeProbe.getAllPods(namespace)
-	result, err = kubeProbe.parsePodFromK8s(k8sPods)
+func (this *KubeProbe) ParsePod(namespace string) (result []*sdk.EntityDTO, err error) {
+	k8sPods, err := this.PodProbe.GetPods(namespace, labels.Everything(), fields.Everything())
+	if err != nil {
+		return nil, err
+	}
+
+	result, err = this.PodProbe.parsePodFromK8s(k8sPods)
 	if err != nil {
 		return nil, err
 	}
 	return result, nil
-}
-
-// Retrieve all the pods defined in namespace
-func (kubeProbe *KubeProbe) getAllPods(namespace string) map[string]*api.Pod {
-	podItems := make(map[string]*api.Pod)
-
-	podList, err := kubeProbe.KubeClient.Pods(namespace).List(labels.Everything(), fields.Everything())
-	if err != nil {
-		return nil
-	}
-	for _, pod := range podList.Items {
-		p := pod
-		podItems[pod.Status.PodIP] = &p
-	}
-	glog.V(3).Infof("Discovering Pods, now the cluster has " + strconv.Itoa(len(podItems)) + " pods")
-
-	return podItems
-}
-
-func (kubeProbe *KubeProbe) parsePodFromK8s(pods map[string]*api.Pod) (result []*sdk.EntityDTO, err error) {
-	glog.V(3).Infof("Now try with cAdvisor")
-
-	// First, group pods according to the ip of their hosting nodes
-	nodePodsMap := make(map[string][]*api.Pod)
-	for _, pod := range pods {
-		hostIP := pod.Status.HostIP
-		var podList []*api.Pod
-		if list, ok := nodePodsMap[hostIP]; ok {
-			podList = list
-		}
-		podList = append(podList, pod)
-		nodePodsMap[hostIP] = podList
-	}
-
-	//Second, process pods according to each node
-	podContainers := make(map[string][]*vmtAdvisor.Container)
-
-	// a pod to Node map
-	podNodeMap := make(map[string]*v1.MachineInfo)
-
-	// For each host there should be a cAdvisor client.
-	for hostIP, _ := range nodePodsMap {
-
-		// use cadvisor to get all containers on that host
-		cadvisor := &vmtAdvisor.CadvisorSource{}
-
-		// TODO, must check the port number for cAdvisor client is static.
-		host := &vmtAdvisor.Host{
-			IP:       hostIP,
-			Port:     4194,
-			Resource: "",
-		}
-
-		// Here we do not need root container.
-		subcontainers, _, err := cadvisor.GetAllContainers(*host, time.Now(), time.Now())
-		if err != nil {
-			return nil, err
-		}
-
-		machineInfo, err := cadvisor.GetMachineInfo(*host)
-		if err != nil {
-			continue
-			// return nil, err
-		}
-
-		// Map container to each pod. Key is pod name, value is container.
-		for _, container := range subcontainers {
-			spec := container.Spec
-			if &spec != nil && container.Spec.Labels != nil {
-				// TODO! hardcoded here. Works but not good. Maybe can find better solution?
-				// The value returned here is namespace/podname
-				if podName, ok := container.Spec.Labels["io.kubernetes.pod.name"]; ok {
-					if podNamespace, hasNamespace := container.Spec.Labels["io.kubernetes.pod.namespace"]; hasNamespace {
-						podName = podNamespace + "/" + podName
-					}
-					glog.V(4).Infof("Container %s is in Pod %s", container.Name, podName)
-					var containers []*vmtAdvisor.Container
-					if ctns, exist := podContainers[podName]; exist {
-						containers = ctns
-					}
-					containers = append(containers, container)
-					podContainers[podName] = containers
-
-					// store in container2PodMap
-					container2PodMap[container.Name] = podName
-
-					// Store in pod node map.
-					if _, exist := podNodeMap[podName]; !exist {
-						podNodeMap[podName] = machineInfo
-					}
-				}
-			}
-		}
-	}
-
-	// Third, get accumulative usage data for each pod according to the underlying containers
-	glog.V(3).Infof("Now parse Pods")
-	for _, pod := range pods {
-		cpuCapacity := int64(0)
-		memCapacity := int64(0)
-
-		// TODO! Here we assume when user defines a pod, resource requirements are also specified.
-		// The metrics we care about now are Cpu and Mem.
-		for _, container := range pod.Spec.Containers {
-			requests := container.Resources.Limits
-			memCapacity += requests.Memory().Value()
-			cpuCapacity += requests.Cpu().MilliValue()
-		}
-
-		podNameWithNamespace := pod.Namespace + "/" + pod.Name
-
-		if _, exist := podNodeMap[podNameWithNamespace]; !exist {
-			glog.Warningf("Cannot find pod %s in podNodeMap", pod.Name)
-			continue
-		}
-
-		// get cpu frequency and convert KHz to MHz
-		cpuFrequency := podNodeMap[podNameWithNamespace].CpuFrequency / 1000
-
-		// the cpu return value is in core*1000, so here should divide 1000
-		podCpuCapacity := float64(cpuCapacity) / 1000 * float64(cpuFrequency)
-		podMemCapacity := float64(memCapacity) / 1024 // Mem is in bytes, convert to Kb
-		glog.V(4).Infof("Cpu cap of Pod %s is %f", pod.Name, podCpuCapacity)
-		glog.V(4).Infof("Mem cap of Pod %s is %f", pod.Name, podMemCapacity)
-
-		podCpuUsed := float64(0)
-		podMemUsed := float64(0)
-
-		if containers, ok := podContainers[podNameWithNamespace]; ok {
-			for _, container := range containers {
-				containerStats := container.Stats
-				if len(containerStats) < 2 {
-					//TODO, maybe a warning is enough?
-					glog.Warningf("Not enough data for %s", podNameWithNamespace)
-					continue
-					// return nil, fmt.Errorf("Not enough data for %s", podNameWithNamespace)
-				}
-				currentStat := containerStats[len(containerStats)-1]
-				prevStat := containerStats[len(containerStats)-2]
-				rawUsage := int64(currentStat.Cpu.Usage.Total - prevStat.Cpu.Usage.Total)
-				intervalInNs := currentStat.Timestamp.Sub(prevStat.Timestamp).Nanoseconds()
-				podCpuUsed += float64(rawUsage) * 1.0 / float64(intervalInNs)
-				podMemUsed += float64(currentStat.Memory.Usage)
-			}
-		} else {
-			glog.Warningf("Cannot find pod %s", pod.Name)
-			continue
-		}
-
-		// convert num of core to frequecy in MHz
-		podCpuUsed = podCpuUsed * float64(cpuFrequency)
-		podMemUsed = podMemUsed / 1024 // Mem is in bytes, convert to Kb
-
-		glog.V(3).Infof(" Discovered pod is " + pod.Name)
-		// TODO, not sure if this conversion is correct.
-		glog.V(4).Infof(" Pod %s CPU request is %f", pod.Name, podCpuUsed)
-		glog.V(4).Infof(" Pod %s Mem request is %f", pod.Name, podMemUsed)
-
-		// Use pod as Application for now
-		podEntityType := sdk.EntityDTO_CONTAINER_POD
-		id := podNameWithNamespace
-		dispName := podNameWithNamespace
-		entityDTOBuilder := sdk.NewEntityDTOBuilder(podEntityType, id)
-
-		minionId := pod.Spec.NodeName
-		if minionId == "" {
-			// At this point the pod should have a hosting minion. If not, then there is something wrong.
-			// TODO! A warning or error?
-		}
-		glog.V(3).Infof("Hosting Minion ID for %s is %s", dispName, minionId)
-
-		glog.V(4).Infof("The actual Cpu used value of %s is %f", id, podCpuUsed)
-		glog.V(4).Infof("The actual Mem used value of %s is %f", id, podMemUsed)
-
-		if actionTestingFlag {
-			podCpuUsed = podCpuCapacity
-			podMemUsed = podMemCapacity
-		}
-		entityDTOBuilder = entityDTOBuilder.DisplayName(dispName)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_MEM_ALLOCATION, podNameWithNamespace).Capacity(podMemCapacity).Used(podMemUsed) // * 0.8)
-		entityDTOBuilder = entityDTOBuilder.Sells(sdk.CommodityDTO_CPU_ALLOCATION, podNameWithNamespace).Capacity(podCpuCapacity).Used(podCpuUsed) // * 0.8)
-		providerUid := nodeUidTranslationMap[minionId]
-		entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, providerUid)
-		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, "Container", podCpuUsed)
-		entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, "Container", podMemUsed)
-		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
-
-		// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
-		tmp := pod.Status.HostIP
-		if localTestingFlag {
-			tmp = "10.10.173.131"
-		}
-		ipAddress := tmp
-		if externalIP, ok := nodeName2ExternalIPMap[minionId]; ok {
-			ipAddress = externalIP
-		}
-		entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", ipAddress)
-		glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", ipAddress)
-
-		entityDto := entityDTOBuilder.Create()
-		result = append(result, entityDto)
-	}
-
-	for _, entityDto := range result {
-		glog.V(3).Infof("Pod EntityDTO: " + entityDto.GetDisplayName())
-	}
-
-	return
 }
 
 // Parse processes those are defined in namespace.
@@ -293,14 +91,13 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 		transactionsCount, _ := kubeProbe.retrieveTransactoins()
 		glog.Infof("transactions are: %s", transactionsCount)
 
-		podSet := kubeProbe.getAllPods(namespace)
 		for podIPAndPort, count := range transactionsCount {
 			tempArray := strings.Split(podIPAndPort, ":")
 			if len(tempArray) < 2 {
 				continue
 			}
 			podIP := tempArray[0]
-			pod, ok := podSet[podIP]
+			pod, ok := podHostIP2PodMap[podIP]
 			if !ok {
 				glog.Errorf("Cannot link pod with IP %s in the podSet", podIP)
 				continue
