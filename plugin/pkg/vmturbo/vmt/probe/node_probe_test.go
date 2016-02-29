@@ -3,6 +3,7 @@ package probe
 import (
 	// "strconv"
 	// "time"
+	"testing"
 
 	"k8s.io/kubernetes/pkg/api"
 
@@ -14,7 +15,6 @@ import (
 
 	// "github.com/vmturbo/vmturbo-go-sdk/sdk"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 type FakeNodeBuilder struct {

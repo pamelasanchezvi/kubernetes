@@ -207,7 +207,6 @@ func (podProbe *PodProbe) getPodResourceStat(pod *api.Pod, podContainers map[str
 	}
 
 	glog.V(3).Infof(" Discovered pod is " + pod.Name)
-	// TODO, not sure if this conversion is correct.
 	glog.V(4).Infof(" Pod %s CPU request is %f", pod.Name, podCpuUsed)
 	glog.V(4).Infof(" Pod %s Mem request is %f", pod.Name, podMemUsed)
 
