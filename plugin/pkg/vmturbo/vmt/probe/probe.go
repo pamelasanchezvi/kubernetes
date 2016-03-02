@@ -25,7 +25,7 @@ var pod2AppMap map[string]map[string]vmtAdvisor.Application = make(map[string]ma
 
 var podTransactionCountMap map[string]int = make(map[string]int)
 
-var localTestingFlag bool = true
+var localTestingFlag bool = false
 
 var actionTestingFlag bool = false
 

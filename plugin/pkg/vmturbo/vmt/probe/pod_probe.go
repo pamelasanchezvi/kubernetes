@@ -86,7 +86,10 @@ func (podProbe *PodProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Entity
 	glog.V(3).Infof("Now parse Pods")
 	for _, pod := range pods {
 
-		podResourceStat := podProbe.getPodResourceStat(pod, podContainers)
+		podResourceStat, err := podProbe.getPodResourceStat(pod, podContainers)
+		if err != nil {
+			continue
+		}
 
 		commoditiesSold := podProbe.getCommoditiesSold(pod, podResourceStat)
 		commoditiesBought := podProbe.getCommoditiesBought(podResourceStat)
@@ -147,7 +150,7 @@ func (podProbe *PodProbe) groupContainerByPod() (map[string][]*vmtAdvisor.Contai
 }
 
 // Get the current pod resource capacity and usage.
-func (podProbe *PodProbe) getPodResourceStat(pod *api.Pod, podContainers map[string][]*vmtAdvisor.Container) *PodResourceStat {
+func (podProbe *PodProbe) getPodResourceStat(pod *api.Pod, podContainers map[string][]*vmtAdvisor.Container) (*PodResourceStat, error) {
 	cpuCapacity := int64(0)
 	memCapacity := int64(0)
 
@@ -190,8 +193,8 @@ func (podProbe *PodProbe) getPodResourceStat(pod *api.Pod, podContainers map[str
 			podMemUsed += float64(currentStat.Memory.Usage)
 		}
 	} else {
-		glog.Warningf("Cannot find pod %s", pod.Name)
-		return nil
+		glog.Warningf("Cannot find pod %s", podNameWithNamespace)
+		return nil, fmt.Errorf("Cannot find pod %s", podNameWithNamespace)
 	}
 
 	// convert num of core to frequecy in MHz
@@ -215,7 +218,7 @@ func (podProbe *PodProbe) getPodResourceStat(pod *api.Pod, podContainers map[str
 		cpuAllocationUsed:     podCpuUsed,
 		memAllocationCapacity: podMemCapacity,
 		memAllocationUsed:     podMemUsed,
-	}
+	}, nil
 }
 
 // Build commodityDTOs for commodity sold by the pod
