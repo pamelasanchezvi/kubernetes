@@ -208,14 +208,13 @@ func (kubeProbe *KubeProbe) ParseApplication(namespace string) (result []*sdk.En
 					Key(providerUid).
 					Create()
 				entityDTOBuilder = entityDTOBuilder.BuysCommodity(appComm)
-				// entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", "10.10.173.131")
 
 				entityDto := entityDTOBuilder.Create()
 
 				appType := app.Cmd
 				tmp := host.IP
 				if localTestingFlag {
-					tmp = "10.10.173.131"
+					tmp = "10.10.173.196"
 				}
 				ipAddress := tmp
 				if externalIP, ok := nodeName2ExternalIPMap[nodeName]; ok {

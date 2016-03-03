@@ -87,7 +87,11 @@ func (nodeProbe *NodeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 		dispName := node.Name
 		nodeUidTranslationMap[node.Name] = nodeID
 
-		commoditiesSold := nodeProbe.createCommoditySold(node)
+		commoditiesSold, err := nodeProbe.createCommoditySold(node)
+		if err != nil {
+			glog.Errorf("Error when create commoditiesSold for %s: %s", node.Name, err)
+			continue
+		}
 		entityDto := nodeProbe.buildVMEntityDTO(nodeID, dispName, commoditiesSold)
 
 		result = append(result, entityDto)
@@ -103,11 +107,14 @@ func (nodeProbe *NodeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 	return
 }
 
-func (nodeProbe *NodeProbe) createCommoditySold(node *api.Node) []*sdk.CommodityDTO {
-	nodeResourceStat := nodeProbe.getNodeResourceStat(node)
+func (nodeProbe *NodeProbe) createCommoditySold(node *api.Node) ([]*sdk.CommodityDTO, error) {
+	var commoditiesSold []*sdk.CommodityDTO
+	nodeResourceStat, err := nodeProbe.getNodeResourceStat(node)
+	if err != nil {
+		return commoditiesSold, nil
+	}
 	nodeID := string(node.UID)
 
-	var commoditiesSold []*sdk.CommodityDTO
 	//TODO: create const value for keys
 	memAllocationComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_MEM_ALLOCATION).
 		Key("Container").
@@ -138,7 +145,7 @@ func (nodeProbe *NodeProbe) createCommoditySold(node *api.Node) []*sdk.Commodity
 		Create()
 	commoditiesSold = append(commoditiesSold, appComm)
 
-	return commoditiesSold
+	return commoditiesSold, nil
 }
 
 func (nodeProbe *NodeProbe) getHost(nodeName string) *vmtAdvisor.Host {
@@ -217,8 +224,6 @@ func (nodeProbe *NodeProbe) generateReconcilationMetaData() *sdk.EntityDTO_Repla
 	replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_VCPU)
 	replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_VMEM)
 	replacementEntityMetaDataBuilder.PatchSelling(sdk.CommodityDTO_APPLICATION)
-	// replacementEntityMetaDataBuilder.PatchBuying(sdk.CommodityDTO_VCPU)
-	// replacementEntityMetaDataBuilder.PatchBuying(sdk.CommodityDTO_VMEM)
 
 	metaData := replacementEntityMetaDataBuilder.Build()
 	return metaData
@@ -227,7 +232,7 @@ func (nodeProbe *NodeProbe) generateReconcilationMetaData() *sdk.EntityDTO_Repla
 // Get the correct IP that will be used during the stitching process.
 func (nodeProbe *NodeProbe) getIPForStitching(nodeName string) string {
 	if localTestingFlag {
-		return "10.10.173.131"
+		return "10.10.173.196"
 	}
 	nodeIPs, exist := nodeProbe.nodeIPMap[nodeName]
 	if !exist {
@@ -241,14 +246,13 @@ func (nodeProbe *NodeProbe) getIPForStitching(nodeName string) string {
 }
 
 // Get current stat of node resources, such as capacity and used values.
-func (this *NodeProbe) getNodeResourceStat(node *api.Node) *NodeResourceStat {
+func (this *NodeProbe) getNodeResourceStat(node *api.Node) (*NodeResourceStat, error) {
 	cadvisor := &vmtAdvisor.CadvisorSource{}
 
 	host := this.getHost(node.Name)
 	machineInfo, err := cadvisor.GetMachineInfo(*host)
 	if err != nil {
-		return nil
-		// return nil, err
+		return nil, fmt.Errorf("Error getting machineInfo from %s", node.Name)
 	}
 	// The return cpu frequency is in KHz, we need MHz
 	cpuFrequency := machineInfo.CpuFrequency / 1000
@@ -263,8 +267,7 @@ func (this *NodeProbe) getNodeResourceStat(node *api.Node) *NodeResourceStat {
 	// To get a valid cpu usage, there must be at least 2 valid stats.
 	if len(containerStats) < 2 {
 		glog.Warning("Not enough data")
-		return nil
-		// return nil, fmt.Errorf("Not enough status data of current node %s.", nodeIP)
+		return nil, fmt.Errorf("Not enough status data of current node %s.", node.Name)
 	}
 	currentStat := containerStats[len(containerStats)-1]
 	prevStat := containerStats[len(containerStats)-2]
@@ -299,7 +302,7 @@ func (this *NodeProbe) getNodeResourceStat(node *api.Node) *NodeResourceStat {
 		vCpuUsed:              cpuUsed,
 		vMemCapacity:          nodeMemCapacity,
 		vMemUsed:              memUsed,
-	}
+	}, nil
 }
 
 // For testing purpose, create fake vm entityDTO

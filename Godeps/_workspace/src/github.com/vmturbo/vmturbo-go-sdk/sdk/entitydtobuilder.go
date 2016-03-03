@@ -113,11 +113,11 @@ func (eb *EntityDTOBuilder) Buys(commodityType CommodityDTO_CommodityType, key s
 		// TODO should have error message. Notify set current provider first
 		return eb
 	}
-	defaultCapacity := float64(0.0)
+	// defaultCapacity := float64(0.0)
 	commDTO := new(CommodityDTO)
 	commDTO.CommodityType = &commodityType
 	commDTO.Key = &key
-	commDTO.Capacity = &defaultCapacity
+	// commDTO.Capacity = &defaultCapacity
 	commDTO.Used = &used
 	eb.BuysCommodity(commDTO)
 	return eb
