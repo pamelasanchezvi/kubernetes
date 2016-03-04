@@ -76,8 +76,6 @@ func (this *VMTPodGetter) GetPods(namespace string, label labels.Selector, field
 
 // Get pod resource usage from Kubernetes cluster and return a list of entityDTOs.
 func (podProbe *PodProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.EntityDTO, err error) {
-	glog.V(3).Infof("Now getting pod metrics from cAdvisor")
-
 	podContainers, err := podProbe.groupContainerByPod()
 	if err != nil {
 		return nil, err
@@ -278,7 +276,7 @@ func (podProbe *PodProbe) buildPodEntityDTO(pod *api.Pod, commoditiesSold, commo
 
 	ipAddress := podProbe.getIPForStitching(pod)
 	entityDTOBuilder = entityDTOBuilder.SetProperty("ipAddress", ipAddress)
-	glog.V(3).Infof("Parse pod: The ip of vm to be stitched is %s", ipAddress)
+	glog.V(3).Infof("Pod %s will be stitched to VM with IP %s", dispName, ipAddress)
 
 	entityDto := entityDTOBuilder.Create()
 	return entityDto, nil

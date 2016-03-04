@@ -27,11 +27,13 @@ func NewApplicationProbe() *ApplicationProbe {
 func (appProbe *ApplicationProbe) ParseApplication(namespace string) (result []*sdk.EntityDTO, err error) {
 	glog.Infof("Has %d hosts", len(hostSet))
 
-	podTransactionCountMap, err := appProbe.calculateTransactionValuePerPod()
+	transactionCountMap, err := appProbe.calculateTransactionValuePerPod()
 	if err != nil {
 		glog.Error(err)
 		return
 	}
+
+	podTransactionCountMap = transactionCountMap
 
 	for nodeName, host := range hostSet {
 
@@ -62,7 +64,7 @@ func (appProbe *ApplicationProbe) ParseApplication(namespace string) (result []*
 			for _, app := range appMap {
 				glog.V(4).Infof("pod %s has the following application %s", podName, app.Cmd)
 
-				appResourceStat := appProbe.getApplicationResourceStat(app, podName, nodeCpuCapacity, nodeMemCapacity, podTransactionCountMap)
+				appResourceStat := appProbe.getApplicationResourceStat(app, podName, nodeCpuCapacity, nodeMemCapacity, transactionCountMap)
 
 				commoditiesSold := appProbe.getCommoditiesSold(app, appResourceStat)
 				commoditiesBoughtMap := appProbe.getCommoditiesBought(podName, nodeName, appResourceStat)
@@ -325,7 +327,7 @@ func (this *ApplicationProbe) getTransactionFromAllNodes() (transactionInfo []vm
 			glog.Warningf("No transaction data in %s.", nodeName)
 			continue
 		}
-		glog.Infof("Transaction from %s is: %v", nodeName, transactions)
+		glog.V(3).Infof("Transactions from %s are: %v", nodeName, transactions)
 
 		transactionInfo = append(transactionInfo, transactions...)
 	}

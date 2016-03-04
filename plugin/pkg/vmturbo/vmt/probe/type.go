@@ -26,3 +26,7 @@ type ApplicationResourceStat struct {
 	transactionCapacity float64
 	transactionUsed     float64
 }
+
+type ServiceResourceStat struct {
+	transactionBought float64
+}
