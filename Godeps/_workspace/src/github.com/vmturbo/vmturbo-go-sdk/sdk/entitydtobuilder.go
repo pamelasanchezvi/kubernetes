@@ -11,6 +11,13 @@ type ProviderDTO struct {
 	Id           *string
 }
 
+func CreateProvider(pType EntityDTO_EntityType, id string) *ProviderDTO {
+	return &ProviderDTO{
+		providerType: &pType,
+		Id:           &id,
+	}
+}
+
 func (pDto *ProviderDTO) getProviderType() *EntityDTO_EntityType {
 	return pDto.providerType
 }
@@ -99,7 +106,11 @@ func (eb *EntityDTOBuilder) requireCommodity() bool {
 	return true
 }
 
-func (eb *EntityDTOBuilder) SetProvider(pType EntityDTO_EntityType, id string) *EntityDTOBuilder {
+func (eb *EntityDTOBuilder) SetProvider(provider *ProviderDTO) {
+	eb.currentProvider = provider
+}
+
+func (eb *EntityDTOBuilder) SetProviderWithTypeAndID(pType EntityDTO_EntityType, id string) *EntityDTOBuilder {
 	eb.currentProvider = &ProviderDTO{
 		providerType: &pType,
 		Id:           &id,

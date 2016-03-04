@@ -11,11 +11,11 @@ import (
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
 
+	cadvisor "github.com/google/cadvisor/info/v1"
 	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/cadvisor"
 
-	"github.com/vmturbo/vmturbo-go-sdk/sdk"
-
 	"github.com/golang/glog"
+	"github.com/vmturbo/vmturbo-go-sdk/sdk"
 )
 
 var hostSet map[string]*vmtAdvisor.Host = make(map[string]*vmtAdvisor.Host)
@@ -24,8 +24,8 @@ var nodeUidTranslationMap map[string]string = make(map[string]string)
 
 var nodeName2ExternalIPMap map[string]string = make(map[string]string)
 
-// A map stores the CPU frequency of each node. Key is node name, value is CPU frequency.
-var nodeFrequencyMap map[string]uint64 = make(map[string]uint64)
+// A map stores the machine information of each node. Key is node name, value is the corresponding machine information.
+var nodeMachineInfoMap map[string]*cadvisor.MachineInfo = make(map[string]*cadvisor.MachineInfo)
 
 type NodeProbe struct {
 	nodesGetter NodesGetter
@@ -256,7 +256,7 @@ func (this *NodeProbe) getNodeResourceStat(node *api.Node) (*NodeResourceStat, e
 	}
 	// The return cpu frequency is in KHz, we need MHz
 	cpuFrequency := machineInfo.CpuFrequency / 1000
-	nodeFrequencyMap[node.Name] = cpuFrequency
+	nodeMachineInfoMap[node.Name] = machineInfo
 
 	// Here we only need the root container.
 	_, root, err := cadvisor.GetAllContainers(*host, time.Now(), time.Now())

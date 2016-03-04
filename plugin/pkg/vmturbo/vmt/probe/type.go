@@ -17,3 +17,12 @@ type PodResourceStat struct {
 	memAllocationCapacity float64
 	memAllocationUsed     float64
 }
+
+type ApplicationResourceStat struct {
+	cpuAllocationUsed   float64
+	memAllocationUsed   float64
+	vCpuUsed            float64
+	vMemUsed            float64
+	transactionCapacity float64
+	transactionUsed     float64
+}

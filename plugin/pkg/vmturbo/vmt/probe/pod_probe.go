@@ -23,7 +23,7 @@ import (
 
 var container2PodMap map[string]string = make(map[string]string)
 
-var podHostIP2PodMap map[string]*api.Pod = make(map[string]*api.Pod)
+var podIP2PodMap map[string]*api.Pod = make(map[string]*api.Pod)
 
 // Pods Getter is such func that gets all the pods match the provided namespace, labels and fiels.
 type PodsGetter func(namespace string, label labels.Selector, field fields.Selector) ([]*api.Pod, error)
@@ -65,8 +65,8 @@ func (this *VMTPodGetter) GetPods(namespace string, label labels.Selector, field
 	var podItems []*api.Pod
 	for _, pod := range podList.Items {
 		p := pod
-		hostIP := p.Status.HostIP
-		podHostIP2PodMap[hostIP] = &p
+		hostIP := p.Status.PodIP
+		podIP2PodMap[hostIP] = &p
 		podItems = append(podItems, &p)
 	}
 	glog.V(3).Infof("Discovering Pods, now the cluster has " + strconv.Itoa(len(podItems)) + " pods")
@@ -165,7 +165,7 @@ func (podProbe *PodProbe) getPodResourceStat(pod *api.Pod, podContainers map[str
 	podNameWithNamespace := pod.Namespace + "/" + pod.Name
 
 	// get cpu frequency
-	cpuFrequency := nodeFrequencyMap[pod.Spec.NodeName]
+	cpuFrequency := nodeMachineInfoMap[pod.Spec.NodeName].CpuFrequency / 1000
 
 	// the cpu return value is in core*1000, so here should divide 1000
 	podCpuCapacity := float64(cpuCapacity) / 1000 * float64(cpuFrequency)
@@ -273,10 +273,7 @@ func (podProbe *PodProbe) buildPodEntityDTO(pod *api.Pod, commoditiesSold, commo
 
 	entityDTOBuilder.SellsCommodities(commoditiesSold)
 	providerUid := nodeUidTranslationMap[minionId]
-	entityDTOBuilder = entityDTOBuilder.SetProvider(sdk.EntityDTO_VIRTUAL_MACHINE, providerUid)
-
-	// entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_CPU_ALLOCATION, "Container", podCpuUsed)
-	// entityDTOBuilder = entityDTOBuilder.Buys(sdk.CommodityDTO_MEM_ALLOCATION, "Container", podMemUsed)
+	entityDTOBuilder = entityDTOBuilder.SetProviderWithTypeAndID(sdk.EntityDTO_VIRTUAL_MACHINE, providerUid)
 	entityDTOBuilder.BuysCommodities(commoditiesBought)
 
 	ipAddress := podProbe.getIPForStitching(pod)
