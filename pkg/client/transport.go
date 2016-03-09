@@ -179,9 +179,9 @@ func NewClientCertTLSConfig(certData, keyData, caData []byte) (*tls.Config, erro
 		Certificates: []tls.Certificate{
 			cert,
 		},
-		RootCAs:    certPool,
-		ClientCAs:  certPool,
-		ClientAuth: tls.RequireAndVerifyClientCert,
+		RootCAs:   certPool,
+		ClientCAs: certPool,
+		// ClientAuth: tls.RequireAndVerifyClientCert,
 	}, nil
 }
 

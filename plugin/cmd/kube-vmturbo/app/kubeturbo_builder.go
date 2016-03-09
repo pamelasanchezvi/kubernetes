@@ -18,10 +18,8 @@ limitations under the License.
 package app
 
 import (
-	"crypto/tls"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 
 	"k8s.io/kubernetes/pkg/api/latest"
@@ -36,8 +34,6 @@ import (
 	"k8s.io/kubernetes/pkg/master/ports"
 	// "k8s.io/kubernetes/pkg/util"
 
-	forked "k8s.io/kubernetes/third_party/forked/coreos/go-etcd/etcd"
-
 	"k8s.io/kubernetes/plugin/pkg/vmturbo"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/conversion"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
@@ -45,23 +41,25 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/registry"
 
-	"github.com/coreos/go-etcd/etcd"
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 )
 
 // VMTServer has all the context and params needed to run a Scheduler
 type VMTServer struct {
-	Port           int
-	Address        net.IP
-	Master         string
-	MetaConfigPath string
-	Kubeconfig     string
-	BindPodsQPS    float32
-	BindPodsBurst  int
-	EtcdServerList []string
-	EtcdConfigFile string
-	EtcdPathPrefix string
+	Port                  int
+	Address               net.IP
+	Master                string
+	MetaConfigPath        string
+	Kubeconfig            string
+	BindPodsQPS           float32
+	BindPodsBurst         int
+	EtcdServerList        []string
+	EtcdCA                string
+	EtcdClientCertificate string
+	EtcdClientKey         string
+	EtcdConfigFile        string
+	EtcdPathPrefix        string
 }
 
 // NewVMTServer creates a new VMTServer with default parameters
@@ -78,8 +76,11 @@ func (s *VMTServer) AddFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&s.Port, "port", s.Port, "The port that the scheduler's http service runs on")
 	fs.StringVar(&s.Master, "master", s.Master, "The address of the Kubernetes API server (overrides any value in kubeconfig)")
 	fs.StringVar(&s.MetaConfigPath, "config-path", s.MetaConfigPath, "The path to the vmt config file.")
-	fs.StringSliceVar(&s.EtcdServerList, "etcd-servers", s.EtcdServerList, "List of etcd servers to watch (http://ip:port), comma separated. Mutually exclusive with -etcd-config")
 	fs.StringVar(&s.Kubeconfig, "kubeconfig", s.Kubeconfig, "Path to kubeconfig file with authorization and master location information.")
+	fs.StringSliceVar(&s.EtcdServerList, "etcd-servers", s.EtcdServerList, "List of etcd servers to watch (http://ip:port), comma separated. Mutually exclusive with -etcd-config")
+	fs.StringVar(&s.EtcdCA, "cacert", s.EtcdCA, "Path to etcd ca.")
+	fs.StringVar(&s.EtcdClientCertificate, "client-cert", s.EtcdClientCertificate, "Path to etcd client certificate")
+	fs.StringVar(&s.EtcdClientKey, "client-key", s.EtcdClientKey, "Path to etcd client key")
 }
 
 // Run runs the specified VMTServer.  This should never exit.
@@ -106,6 +107,7 @@ func (s *VMTServer) Run(_ []string) error {
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: s.Kubeconfig},
 		&clientcmd.ConfigOverrides{ClusterInfo: clientcmdapi.Cluster{Server: s.Master}}).ClientConfig()
 	if err != nil {
+		glog.Errorf("Error getting kubeconfig:  %s", err)
 		return err
 	}
 	// This specifies the number and the max number of query per second to the api server.
@@ -139,10 +141,18 @@ func (s *VMTServer) Run(_ []string) error {
 	vmtMeta := metadata.NewVMTMeta(s.MetaConfigPath)
 	glog.V(3).Infof("The vmt server address is %s", vmtMeta.ServerAddress)
 
+	etcdclientBuilder := etcdhelper.NewEtcdClientBuilder().ServerList(s.EtcdServerList).SetTransport(s.EtcdCA, s.EtcdClientCertificate, s.EtcdClientKey)
+	etcdClient, err := etcdclientBuilder.CreateAndTest()
+	if err != nil {
+		glog.Errorf("Error creating etcd client instance for vmt service: %s", err)
+		return err
+	}
+
 	s.EtcdPathPrefix = master.DefaultEtcdPathPrefix
-	etcdStorage, err := newEtcd(s.EtcdConfigFile, s.EtcdServerList, latest.InterfacesFor, latest.Version, "", s.EtcdPathPrefix)
+	etcdStorage, err := newEtcd(etcdClient, latest.InterfacesFor, latest.Version, "", s.EtcdPathPrefix)
 	if err != nil {
 		glog.Warningf("Error creating etcd storage instance for vmt service: %s", err)
+		return err
 	}
 
 	vmtConfig := vmturbo.NewVMTConfig(kubeClient, etcdStorage, vmtMeta)
@@ -154,29 +164,11 @@ func (s *VMTServer) Run(_ []string) error {
 	select {}
 }
 
-func newEtcd(etcdConfigFile string, etcdServerList []string, interfacesFunc meta.VersionInterfacesFunc, defaultVersion, storageVersion, pathPrefix string) (etcdStorage storage.Storage, err error) {
-	var client tools.EtcdClient
-	if etcdConfigFile != "" {
-		client, err = etcd.NewClientFromFile(etcdConfigFile)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		etcdClient := etcd.NewClient(etcdServerList)
-		transport := &http.Transport{
-			Dial: forked.Dial,
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-			MaxIdleConnsPerHost: 500,
-		}
-		etcdClient.SetTransport(transport)
-		client = etcdClient
-	}
-
+func newEtcd(client tools.EtcdClient, interfacesFunc meta.VersionInterfacesFunc, defaultVersion, storageVersion, pathPrefix string) (etcdStorage storage.Storage, err error) {
 	if storageVersion == "" {
 		storageVersion = defaultVersion
 	}
+
 	master.NewEtcdStorage(client, interfacesFunc, storageVersion, pathPrefix)
 
 	simpleCodec := conversion.NewSimpleCodec()

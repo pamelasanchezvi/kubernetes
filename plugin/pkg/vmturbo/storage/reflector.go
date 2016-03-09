@@ -246,13 +246,13 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 			glog.Errorf("Error during calling watch: %v", err)
 			return nil
 		}
-		glog.V(4).Infof("watch from listerWather is %v", w)
+		glog.V(5).Infof("watch from listerWather is %v", w)
 
 		if err := r.watchHandler(w, &resourceVersion, resyncCh, stopCh); err != nil {
 			if err != errorResyncRequested && err != errorStopRequested {
-				glog.Warningf("%s: watch of %v ended with: %v", r.name, r.expectedType, err)
+				// glog.Warningf("%s: watch of %v ended with: %v", r.name, r.expectedType, err)
 			}
-			glog.Error("Error calling watchHandler: %s. Return from for loop in ListAndWatch.", err)
+			// glog.Error("Error calling watchHandler: %s. Return from for loop in ListAndWatch.", err)
 			return nil
 		}
 		glog.V(4).Info("End of for loop in ListAndWatch.")
@@ -291,7 +291,7 @@ loop:
 		case <-resyncCh:
 			return errorResyncRequested
 		case event, ok := <-w.ResultChan():
-			glog.V(4).Infof("%v Result Event in reflector is: %v", ok, event)
+			// glog.V(4).Infof("%v Result Event in reflector is: %v", ok, event)
 			if !ok {
 				break loop
 			}
@@ -330,7 +330,7 @@ loop:
 
 	watchDuration := time.Now().Sub(start)
 	if watchDuration < 1*time.Second && eventCount == 0 {
-		glog.V(4).Infof("%s: Unexpected watch close - watch lasted less than a second and no items received", r.name)
+		// glog.V(4).Infof("%s: Unexpected watch close - watch lasted less than a second and no items received", r.name)
 		return errors.New("very short watch")
 	}
 	glog.V(4).Infof("%s: Watch close - %v total %v items received", r.name, r.expectedType, eventCount)
