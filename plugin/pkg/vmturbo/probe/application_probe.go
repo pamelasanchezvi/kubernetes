@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	vmtproxy "k8s.io/kubernetes/pkg/proxy/vmturbo"
-	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/cadvisor"
-	vmtmonitor "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/monitor"
+	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/cadvisor"
+	vmtmonitor "k8s.io/kubernetes/plugin/pkg/vmturbo/monitor"
 
 	"github.com/golang/glog"
 	info "github.com/google/cadvisor/info/v2"

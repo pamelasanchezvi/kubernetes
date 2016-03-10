@@ -8,7 +8,7 @@ import (
 	"k8s.io/kubernetes/pkg/version/verflag"
 
 	"k8s.io/kubernetes/plugin/cmd/kube-vmtactionsimulator/builder"
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt"
+	vmtaction "k8s.io/kubernetes/plugin/pkg/vmturbo/action"
 
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
@@ -36,7 +36,7 @@ func main() {
 	namespace := simulator.Namespace()
 
 	// The simulator can simulate move, get and provision action now.
-	actor := vmt.NewKubeActor(simulator.KubeClient())
+	actor := vmtaction.NewKubeActor(simulator.KubeClient())
 	if action == "move" || action == "Move " {
 		podToMove := simulator.PodToMove()
 		destinationNode := simulator.Destination()

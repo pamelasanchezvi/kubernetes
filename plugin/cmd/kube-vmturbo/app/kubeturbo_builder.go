@@ -36,10 +36,10 @@ import (
 
 	"k8s.io/kubernetes/plugin/pkg/vmturbo"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/conversion"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/metadata"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/registry"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
 	etcdhelper "k8s.io/kubernetes/plugin/pkg/vmturbo/storage/etcd"
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/registry"
 
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package storage
+package cache
 
 import (
 	"errors"
@@ -209,6 +209,7 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 	// 	return fmt.Errorf("%s: Unable to sync list result: %v", r.name, err)
 	// }
 	// r.setLastSyncResourceVersion(resourceVersion)
+
 	resourceVersion = "0"
 
 	for {

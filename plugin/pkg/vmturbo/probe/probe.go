@@ -5,7 +5,7 @@ import (
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
 
-	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/cadvisor"
+	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/cadvisor"
 
 	"github.com/golang/glog"
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"

@@ -14,13 +14,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package storage
+package cache
 
 import (
 	"reflect"
 
 	"k8s.io/kubernetes/pkg/fields"
 	// "k8s.io/kubernetes/pkg/watch"
+
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage/vmtruntime"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage/watch"
 
@@ -42,7 +44,7 @@ type ListWatch struct {
 }
 
 // NewListWatchFromClient creates a new ListWatch from the specified client, resource, namespace and field selector.
-func NewListWatchFromStorage(s Storage, resource string, namespace string, fieldSelector fields.Selector) *ListWatch {
+func NewListWatchFromStorage(s storage.Storage, resource string, namespace string, fieldSelector fields.Selector) *ListWatch {
 	listFunc := func() (vmtruntime.VMTObject, error) {
 		return nil, nil
 

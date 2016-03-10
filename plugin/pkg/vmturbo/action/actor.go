@@ -1,4 +1,4 @@
-package vmt
+package action
 
 import (
 	"fmt"
@@ -10,8 +10,8 @@ import (
 	"k8s.io/kubernetes/pkg/labels"
 	// "k8s.io/kubernetes/pkg/storage"
 
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/registry"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/registry"
 
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"
 
@@ -20,8 +20,8 @@ import (
 
 // KubernetesActionExecutor is responsilbe for executing different kinds of action requested by vmt server.
 type KubernetesActionExecutor struct {
-	kubeClient  *client.Client
-	etcdStorage storage.Storage
+	KubeClient  *client.Client
+	EtcdStorage storage.Storage
 }
 
 // Switch between different kinds of the action according to action request and call the actually corresponding
@@ -106,7 +106,7 @@ func (kae *KubernetesActionExecutor) ExcuteAction(actionItem *sdk.ActionItemDTO,
 // Create new VMT Actor. Must specify the kubernetes client.
 func NewKubeActor(client *client.Client) *KubernetesActionExecutor {
 	return &KubernetesActionExecutor{
-		kubeClient: client,
+		KubeClient: client,
 	}
 }
 
@@ -114,7 +114,7 @@ func NewKubeActor(client *client.Client) *KubernetesActionExecutor {
 // then replication controller will create a new replica. The place to deploy the replica
 // should be generated from vmt server.
 func (this *KubernetesActionExecutor) MovePod(podIdentifier, namespace, targetNodeIdentifier string, msgID int32) (err error) {
-	kubeClient := this.kubeClient
+	KubeClient := this.KubeClient
 
 	glog.V(4).Infof("Now K8s trys to  move pod %s.\n", podIdentifier)
 	// TODO !!!For test purpose, delete the first pod
@@ -127,7 +127,7 @@ func (this *KubernetesActionExecutor) MovePod(podIdentifier, namespace, targetNo
 	if targetNodeIdentifier == "" {
 		glog.Warningf("Destination is not specified. Schedule to original host.\n")
 	}
-	err = kubeClient.Pods(namespace).Delete(podIdentifier, nil)
+	err = KubeClient.Pods(namespace).Delete(podIdentifier, nil)
 	if err != nil {
 		glog.Errorf("Error when deleting pod %s: %s.\n", podIdentifier, err)
 	} else {
@@ -146,7 +146,7 @@ func (this *KubernetesActionExecutor) MovePod(podIdentifier, namespace, targetNo
 	//------------------------------------------------------------------------------
 	// The desired move scenario is using etcd.
 	// Here it first post action event onto etcd. Then other component watches etcd will get the move event.
-	vmtEvents := registry.NewVMTEvents(this.kubeClient, "", this.etcdStorage)
+	vmtEvents := registry.NewVMTEvents(this.KubeClient, "", this.EtcdStorage)
 	event := registry.GenerateVMTEvent(action, namespace, podIdentifier, targetNodeIdentifier, int(msgID))
 	glog.V(3).Infof("vmt event is %v, msgId is %d, %d", event, msgID, int(msgID))
 	_, errorPost := vmtEvents.Create(event)
@@ -176,8 +176,8 @@ func (this *KubernetesActionExecutor) UpdateReplicas(podLabel, namespace string,
 func (this *KubernetesActionExecutor) ProvisionPods(targetReplicationController api.ReplicationController, newReplicas int, msgID int32) (err error) {
 	targetReplicationController.Spec.Replicas = newReplicas
 	namespace := targetReplicationController.Namespace
-	kubeClient := this.kubeClient
-	newRC, err := kubeClient.ReplicationControllers(namespace).Update(&targetReplicationController)
+	KubeClient := this.KubeClient
+	newRC, err := KubeClient.ReplicationControllers(namespace).Update(&targetReplicationController)
 	if err != nil {
 		return fmt.Errorf("Error updating replication controller %s: %s", targetReplicationController.Name, err)
 	}
@@ -188,7 +188,7 @@ func (this *KubernetesActionExecutor) ProvisionPods(targetReplicationController 
 	}
 
 	action := "provision"
-	vmtEvents := registry.NewVMTEvents(this.kubeClient, "", this.etcdStorage)
+	vmtEvents := registry.NewVMTEvents(this.KubeClient, "", this.EtcdStorage)
 	event := registry.GenerateVMTEvent(action, namespace, newRC.Name, "not specified", int(msgID))
 	glog.V(3).Infof("vmt event is %v, msgId is %d, %d", event, msgID, int(msgID))
 	_, errorPost := vmtEvents.Create(event)
@@ -219,7 +219,7 @@ func (this *KubernetesActionExecutor) getReplicationController(rcName, namespace
 
 // Get all replication controllers defined in the specified namespace.
 func (this *KubernetesActionExecutor) GetAllRC(namespace string) (replicationControllers []api.ReplicationController, err error) {
-	rcList, err := this.kubeClient.ReplicationControllers(namespace).List(labels.Everything())
+	rcList, err := this.KubeClient.ReplicationControllers(namespace).List(labels.Everything())
 	if err != nil {
 		glog.Errorf("Error when getting all the replication controllers: %s", err)
 	}
@@ -232,7 +232,7 @@ func (this *KubernetesActionExecutor) GetAllRC(namespace string) (replicationCon
 
 // Get all nodes currently in K8s.
 func (this *KubernetesActionExecutor) GetAllNodes() []*api.Node {
-	nodeList, err := this.kubeClient.Nodes().List(labels.Everything(), fields.Everything())
+	nodeList, err := this.KubeClient.Nodes().List(labels.Everything(), fields.Everything())
 	if err != nil {
 		return nil
 	}

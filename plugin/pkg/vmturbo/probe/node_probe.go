@@ -12,7 +12,7 @@ import (
 	"k8s.io/kubernetes/pkg/labels"
 
 	cadvisor "github.com/google/cadvisor/info/v1"
-	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/cadvisor"
+	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/cadvisor"
 
 	"github.com/golang/glog"
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"

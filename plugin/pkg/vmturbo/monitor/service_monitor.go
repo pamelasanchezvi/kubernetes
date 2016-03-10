@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	vmtproxy "k8s.io/kubernetes/pkg/proxy/vmturbo"
-	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/cadvisor"
+	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/cadvisor"
 
 	"github.com/golang/glog"
 )

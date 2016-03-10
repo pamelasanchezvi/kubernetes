@@ -6,7 +6,6 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/util"
-	// "k8s.io/kubernetes/pkg/watch"
 
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage/watch"

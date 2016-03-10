@@ -5,14 +5,12 @@ import (
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/client/cache"
 	"k8s.io/kubernetes/pkg/fields"
-	// "k8s.io/kubernetes/pkg/storage"
 
+	vmtmeta "k8s.io/kubernetes/plugin/pkg/vmturbo/metadata"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/registry"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
-	vmtcache "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/cache"
-	vmtmeta "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/metadata"
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/registry"
 
-	vmtstorage "k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
+	vmtcache "k8s.io/kubernetes/plugin/pkg/vmturbo/cache"
 )
 
 // Meta stores VMT Metadata.
@@ -47,7 +45,7 @@ func NewVMTConfig(client *client.Client, etcdStorage storage.Storage, meta *vmtm
 	cache.NewReflector(config.createUnassignedPodLW(), &api.Pod{}, config.PodQueue, 0).RunUntil(config.StopEverything)
 
 	// monitor vmtevents
-	vmtstorage.NewReflector(config.createVMTEventLW(), &registry.VMTEvent{}, config.VMTEventQueue, 0).RunUntil(config.StopEverything)
+	vmtcache.NewReflector(config.createVMTEventLW(), &registry.VMTEvent{}, config.VMTEventQueue, 0).RunUntil(config.StopEverything)
 
 	return config
 }
@@ -73,8 +71,8 @@ func (c *Config) createUnassignedPodLW() *cache.ListWatch {
 }
 
 // VMTEvent ListWatch
-func (c *Config) createVMTEventLW() *vmtstorage.ListWatch {
-	return vmtstorage.NewListWatchFromStorage(c.EtcdStorage, "vmtevents", api.NamespaceAll, nil)
+func (c *Config) createVMTEventLW() *vmtcache.ListWatch {
+	return vmtcache.NewListWatchFromStorage(c.EtcdStorage, "vmtevents", api.NamespaceAll, nil)
 }
 
 func parseSelectorOrDie(s string) fields.Selector {

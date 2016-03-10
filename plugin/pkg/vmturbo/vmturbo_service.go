@@ -8,9 +8,10 @@ import (
 	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/plugin/pkg/scheduler"
 
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt"
-	vmtapi "k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/api"
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/vmt/registry"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/action"
+	vmtapi "k8s.io/kubernetes/plugin/pkg/vmturbo/api"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/registry"
+	comm "k8s.io/kubernetes/plugin/pkg/vmturbo/vmturbocommunicator"
 
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"
 
@@ -19,7 +20,7 @@ import (
 
 type VMTurboService struct {
 	config       *Config
-	vmtcomm      *vmt.VMTCommunicator
+	vmtcomm      *comm.VMTCommunicator
 	vmtEventChan chan *registry.VMTEvent
 }
 
@@ -35,7 +36,7 @@ func NewVMTurboService(c *Config) *VMTurboService {
 func (v *VMTurboService) Run() {
 	glog.V(3).Infof("********** Start runnning VMT service **********")
 
-	vmtCommunicator := vmt.NewVMTCommunicator(v.config.Client, v.config.Meta, v.config.EtcdStorage)
+	vmtCommunicator := comm.NewVMTCommunicator(v.config.Client, v.config.Meta, v.config.EtcdStorage)
 	v.vmtcomm = vmtCommunicator
 	// register and validates to vmturbo server
 	go vmtCommunicator.Run()
@@ -136,7 +137,7 @@ func (v *VMTurboService) getNextPod() {
 		// This if block is for test move action only.
 		// if the pod is generated from move action, then after scheduler, it should avoid the following normal
 		// schedule and return
-		moveSimulator := &vmt.MoveSimulator{}
+		moveSimulator := &action.MoveSimulator{}
 		if destination, msgID := moveSimulator.IsMovePod(); destination != "" {
 			glog.V(2).Infof("Move Pod %v to %s", pod.Name, destination)
 
