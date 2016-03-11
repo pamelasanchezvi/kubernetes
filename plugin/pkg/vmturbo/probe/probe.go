@@ -6,6 +6,7 @@ import (
 	"k8s.io/kubernetes/pkg/labels"
 
 	vmtAdvisor "k8s.io/kubernetes/plugin/pkg/vmturbo/cadvisor"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/probe/helper"
 
 	"github.com/golang/glog"
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"
@@ -14,6 +15,21 @@ import (
 var localTestingFlag bool = false
 
 var actionTestingFlag bool = false
+
+var localTestStitchingIP string = ""
+
+func init() {
+	flag, err := helper.LoadTestingFlag("./plugin/pkg/vmturbo/probe/helper/testing_flag.json")
+	if err != nil {
+		return
+	}
+	localTestingFlag = flag.LocalTestingFlag
+	actionTestingFlag = flag.ActionTestingFlag
+	localTestStitchingIP = flag.LocalTestStitchingIP
+
+	glog.Infof("local %s", localTestingFlag)
+	glog.Infof("s IP %s", localTestStitchingIP)
+}
 
 type KubeProbe struct {
 	KubeClient *client.Client

@@ -22,7 +22,7 @@ const (
 // example : http://localhost:8400/vmturbo/api/externaltargets?
 //                     type=Kubernetes&nameOrAddress=10.10.150.2&username=AAA&targetIdentifier=A&password=Sysdreamworks123
 func (vmtApi *VmtApi) AddK8sTarget(targetType, nameOrAddress, username, targetIdentifier, password string) error {
-	fmt.Println("---------- Inside AddTarget() ----------")
+	glog.V(3).Infof("Add target to VMTurbo Ops Manager.")
 
 	requestData := make(map[string]string)
 
@@ -62,7 +62,7 @@ func (vmtApi *VmtApi) AddK8sTarget(targetType, nameOrAddress, username, targetId
 	if err != nil {
 		return err
 	}
-	glog.Infof("Add target response is %", respMsg)
+	glog.V(3).Infof("Add target response is %", respMsg)
 
 	return nil
 }
@@ -88,14 +88,14 @@ func (vmtApi *VmtApi) DiscoverTarget(nameOrAddress string) error {
 // Create the reservation specification and
 // return map which has pod name as key and node name as value
 func (vmtApi *VmtApi) RequestPlacement(requestSpec, filterProperties map[string]string) (map[string]string, error) {
-	glog.V(4).Info("---------- Inside RequestPlacement ----------")
+	glog.V(4).Info("Inside RequestPlacement")
 
 	requestData := make(map[string]string)
 
 	var requestDataBuffer bytes.Buffer
 
 	if reservation_name, ok := requestSpec["reservation_name"]; !ok {
-		glog.Errorf("---------- reservation name is not registered ----------")
+		glog.Errorf("reservation name is not registered")
 		return nil, fmt.Errorf("reservation_name has not been registered.")
 	} else {
 		requestData["reservationName"] = reservation_name
@@ -105,7 +105,7 @@ func (vmtApi *VmtApi) RequestPlacement(requestSpec, filterProperties map[string]
 	}
 
 	if num_instances, ok := requestSpec["num_instances"]; !ok {
-		glog.Errorf("---------- num_instances not registered ----------")
+		glog.Errorf("num_instances not registered.")
 		return nil, fmt.Errorf("num_instances has not been registered.")
 	} else {
 		requestData["count"] = num_instances
@@ -115,7 +115,7 @@ func (vmtApi *VmtApi) RequestPlacement(requestSpec, filterProperties map[string]
 	}
 
 	if template_name, ok := requestSpec["template_name"]; !ok {
-		glog.Errorf("---------- template name is not registered ----------")
+		glog.Errorf("template name is not registered")
 		return nil, fmt.Errorf("template_name has not been registered.")
 	} else {
 		requestData["templateName"] = template_name
@@ -125,7 +125,7 @@ func (vmtApi *VmtApi) RequestPlacement(requestSpec, filterProperties map[string]
 	}
 
 	if deployment_profile, ok := requestSpec["deployment_profile"]; !ok {
-		glog.Errorf("---------- deployment profile is not registered ----------")
+		glog.Errorf("Deployment profile is not registered.")
 		//return nil, fmt.Errorf("deployment_profile has not been registered.")
 	} else {
 		requestData["deploymentProfile"] = deployment_profile
@@ -137,6 +137,7 @@ func (vmtApi *VmtApi) RequestPlacement(requestSpec, filterProperties map[string]
 	// Append date and time
 	requestDataBuffer.WriteString("deployDate=")
 	// Must make sure space is escaped
+	// TODO,
 	requestDataBuffer.WriteString("2015-10-11%2016:00:00")
 	s := requestDataBuffer.String()
 	glog.V(3).Infof("parameters are %s", s)

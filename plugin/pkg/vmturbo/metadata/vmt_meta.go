@@ -2,22 +2,16 @@ package metadata
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
+
+	"github.com/golang/glog"
 )
 
 const (
 	// Appliance address.
-	// SERVER_ADDRESS string = "10.10.173.193:80"
-
-	// SERVER_ADDRESS string = "10.10.192.78:8080"
 
 	SERVER_ADDRESS string = "10.10.200.114:8080"
-
-	// SERVER_ADDRESS string = "192.168.1.4:8080"
-
-	// SERVER_ADDRESS string = "192.168.1.4:8080"
 
 	TARGET_TYPE string = "Kubernetes"
 
@@ -69,19 +63,19 @@ func NewVMTMeta(metaConfigFilePath string) *VMTMeta {
 	}
 
 	metaConfig := readConfig(metaConfigFilePath)
-	fmt.Println("Service Address is %s", metaConfig.ServerAddress)
+	glog.V(4).Infof("Service Address is %s", metaConfig.ServerAddress)
 
 	if metaConfig.ServerAddress != "" {
-		fmt.Println("Service Address is %s", metaConfig.ServerAddress)
+		glog.V(4).Infof("Service Address is %s", metaConfig.ServerAddress)
 		meta.ServerAddress = metaConfig.ServerAddress
 	}
 
-	fmt.Println("TargetIdentifier is %s", metaConfig.TargetIdentifier)
+	glog.V(4).Infof("TargetIdentifier is %s", metaConfig.TargetIdentifier)
 	if metaConfig.TargetIdentifier != "" {
 		meta.TargetIdentifier = metaConfig.TargetIdentifier
 	}
 
-	fmt.Println("NameOrAddress is %s", metaConfig.NameOrAddress)
+	glog.V(4).Infof("NameOrAddress is %s", metaConfig.NameOrAddress)
 	if metaConfig.NameOrAddress != "" {
 		meta.NameOrAddress = metaConfig.NameOrAddress
 	}
@@ -98,18 +92,15 @@ func NewVMTMeta(metaConfigFilePath string) *VMTMeta {
 	return meta
 }
 
+// Get the config from file.
 func readConfig(path string) VMTMeta {
 	file, e := ioutil.ReadFile(path)
 	if e != nil {
-		fmt.Printf("File error: %v\n", e)
+		glog.Errorf("File error: %v\n", e)
 		os.Exit(1)
 	}
-	fmt.Printf("%s\n", string(file))
-
-	//m := new(Dispatch)
-	//var m interface{}
 	var metaData VMTMeta
 	json.Unmarshal(file, &metaData)
-	fmt.Printf("Results: %v\n", metaData)
+	glog.V(4).Infof("Results: %v\n", metaData)
 	return metaData
 }

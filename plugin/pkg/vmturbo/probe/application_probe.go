@@ -274,15 +274,8 @@ func (this *ApplicationProbe) buildApplicationEntityDTOs(app vmtAdvisor.Applicat
 	entityDto := entityDTOBuilder.Create()
 
 	appType := app.Cmd
-	tmp := host.IP
-	if localTestingFlag {
-		tmp = "10.10.173.196"
-	}
-	ipAddress := tmp
-	if externalIP, ok := nodeName2ExternalIPMap[nodeName]; ok {
-		ipAddress = externalIP
-	}
-	glog.V(4).Infof("Parse application: The ip of vm to be stitched is %s", ipAddress)
+
+	ipAddress := this.getIPAddress(host, nodeName)
 
 	appData := &sdk.EntityDTO_ApplicationData{
 		Type:      &appType,
@@ -344,4 +337,17 @@ func (this *ApplicationProbe) getTransactionFromNode(host *vmtAdvisor.Host) ([]v
 		return transactions, err
 	}
 	return transactions, nil
+}
+
+func (this *ApplicationProbe) getIPAddress(host *vmtAdvisor.Host, nodeName string) string {
+	if localTestingFlag {
+		return localTestStitchingIP
+	}
+	ipAddress := host.IP
+	if externalIP, ok := nodeName2ExternalIPMap[nodeName]; ok {
+		ipAddress = externalIP
+	}
+	glog.V(4).Infof("Parse application: The ip of vm to be stitched is %s", ipAddress)
+
+	return ipAddress
 }

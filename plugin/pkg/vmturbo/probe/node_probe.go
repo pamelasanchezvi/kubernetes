@@ -232,7 +232,7 @@ func (nodeProbe *NodeProbe) generateReconcilationMetaData() *sdk.EntityDTO_Repla
 // Get the correct IP that will be used during the stitching process.
 func (nodeProbe *NodeProbe) getIPForStitching(nodeName string) string {
 	if localTestingFlag {
-		return "10.10.173.196"
+		return localTestStitchingIP
 	}
 	nodeIPs, exist := nodeProbe.nodeIPMap[nodeName]
 	if !exist {
@@ -333,7 +333,7 @@ func (this *NodeProbe) buildFakeVMEntityDTO() *sdk.EntityDTO {
 		Capacity(float64(nodeMemCapacity)).Used(memUsed)
 	entityDTOBuilder2 = entityDTOBuilder2.Sells(sdk.CommodityDTO_VCPU, "1.1.1.1").
 		Capacity(float64(nodeCpuCapacity)).Used(cpuUsed)
-	entityDTOBuilder2 = entityDTOBuilder2.SetProperty("IP", "10.10.173.196")
+	entityDTOBuilder2 = entityDTOBuilder2.SetProperty("IP", localTestStitchingIP)
 
 	metaData2 := this.generateReconcilationMetaData()
 

@@ -287,7 +287,7 @@ func (podProbe *PodProbe) buildPodEntityDTO(pod *api.Pod, commoditiesSold, commo
 // The correct behavior depends on what kind of IP address the hypervisor probe picks.
 func (podProbe *PodProbe) getIPForStitching(pod *api.Pod) string {
 	if localTestingFlag {
-		return "10.10.173.196"
+		return localTestStitchingIP
 	}
 	ipAddress := pod.Status.HostIP
 	minionId := pod.Spec.NodeName
