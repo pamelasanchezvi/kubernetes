@@ -66,7 +66,7 @@ _tmp/
 doc_tmp/
 
 # ignore vmt other config files
-plugin/pkg/vmturbo/vmt/metadata/config_nyc.json
+plugin/pkg/vmturbo/metadata/config_nyc.json
 plugin/pkg/vmturbo/probe/helper/testing_flag.json
 
 # ignore key

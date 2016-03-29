@@ -108,13 +108,14 @@ func (this *ServiceProbe) ParseService(serviceList []*api.Service, endpointList 
 
 		// Now build entityDTO
 		for serviceID, podIDList := range serviceEndpointMap {
-			glog.Infof("service %s has the following pod as endpoints %s", serviceID, podIDList)
+			glog.V(3).Infof("service %s has the following pod as endpoints %s", serviceID, podIDList)
 
 			if len(podIDList) < 1 {
 				continue
 			}
 
 			processMap := pod2AppMap[podIDList[0]]
+
 			for appName := range processMap {
 
 				commoditiesBoughtMap := this.getCommoditiesBought(appName, podIDList)

@@ -44,7 +44,9 @@ func (appProbe *ApplicationProbe) ParseApplication(namespace string) (result []*
 			continue
 		}
 
-		pod2AppMap = pod2ApplicationMap
+		for podName, appMap := range pod2ApplicationMap {
+			pod2AppMap[podName] = appMap
+		}
 
 		// In order to get the actual usage for each process, the CPU/Mem capacity
 		// for the machine must be retrieved.
@@ -83,13 +85,13 @@ func (this *ApplicationProbe) calculateTransactionValuePerPod() (map[string]int,
 	if err != nil {
 		return nil, err
 	}
-	glog.Infof("transactions are: %s", transactionsCount)
 
 	var transactionCountMap map[string]int = make(map[string]int)
 
 	for podIPAndPort, count := range transactionsCount {
 		tempArray := strings.Split(podIPAndPort, ":")
 		if len(tempArray) < 2 {
+			glog.Errorf("Cannot get transaction count for endpoint %s", podIPAndPort)
 			continue
 		}
 		podIP := tempArray[0]
@@ -100,7 +102,9 @@ func (this *ApplicationProbe) calculateTransactionValuePerPod() (map[string]int,
 		}
 		podNameWithNamespace := pod.Namespace + "/" + pod.Name
 		transactionCountMap[podNameWithNamespace] = count
+
 	}
+	glog.V(5).Infof("transactionCountMap is %++v", transactionCountMap)
 	return transactionCountMap, nil
 }
 
@@ -129,7 +133,7 @@ func (this *ApplicationProbe) getApplicaitonPerPod(host *vmtAdvisor.Host) (map[s
 		// Here cgroupPath for a process is the same with the container name
 		cgroupPath := process.CgroupPath
 		if podName, exist := container2PodMap[cgroupPath]; exist {
-			glog.V(4).Infof("%s is in pod %s", process.Cmd, podName)
+			glog.V(5).Infof("%s is in pod %s", process.Cmd, podName)
 			var processList []info.ProcessInfo
 			if processes, hasList := pod2ProcessesMap[podName]; hasList {
 				processList = processes
@@ -165,6 +169,8 @@ func (this *ApplicationProbe) getApplicaitonPerPod(host *vmtAdvisor.Host) (map[s
 			}
 		}
 	}
+	glog.V(4).Infof("pod2ApplicationMap is %++v", pod2ApplicationMap)
+
 	return pod2ApplicationMap, nil
 }
 
@@ -175,8 +181,8 @@ func (this *ApplicationProbe) getApplicationResourceStat(app vmtAdvisor.Applicat
 
 	dispName := app.Cmd + "::" + podName
 
-	glog.V(4).Infof("Percent Cpu for %s is %f, usage is %f", dispName, app.PercentCpu, cpuUsage)
-	glog.V(4).Infof("Percent Mem for %s is %f, usage is %f", dispName, app.PercentMemory, memUsage)
+	glog.V(5).Infof("Percent Cpu for %s is %f, usage is %f", dispName, app.PercentCpu, cpuUsage)
+	glog.V(5).Infof("Percent Mem for %s is %f, usage is %f", dispName, app.PercentMemory, memUsage)
 
 	transactionCapacity := float64(1000)
 	transactionUsed := float64(0)

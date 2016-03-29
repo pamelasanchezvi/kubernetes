@@ -103,23 +103,27 @@ func (handler *KubernetesServerMessageHandler) DiscoverTopology(serverMsg *comm.
 	nodeEntityDtos, err := kubeProbe.ParseNode()
 	if err != nil {
 		// TODO, should here still send out msg to server?
+		glog.Errorf("Error parsing nodes: %s. Will return.", err)
 		return
 	}
 
 	podEntityDtos, err := kubeProbe.ParsePod(api.NamespaceAll)
 	if err != nil {
 		// TODO, should here still send out msg to server? Or set errorDTO?
+		glog.Errorf("Error parsing pods: %s. Will return.", err)
 		return
 	}
 
 	appEntityDtos, err := kubeProbe.ParseApplication(api.NamespaceAll)
 	if err != nil {
+		glog.Errorf("Error parsing applications: %s. Will return.", err)
 		return
 	}
 
 	serviceEntityDtos, err := kubeProbe.ParseService(api.NamespaceAll, labels.Everything())
 	if err != nil {
 		// TODO, should here still send out msg to server? Or set errorDTO?
+		glog.Errorf("Error parsing services: %s. Will return.", err)
 		return
 	}
 

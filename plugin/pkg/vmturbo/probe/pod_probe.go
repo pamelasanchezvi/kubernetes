@@ -86,6 +86,7 @@ func (podProbe *PodProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Entity
 
 		podResourceStat, err := podProbe.getPodResourceStat(pod, podContainers)
 		if err != nil {
+			glog.Warningf("Error getting resource consumption for pod %s: %s", pod.Namespace+"/"+pod.Name, err)
 			continue
 		}
 
@@ -163,7 +164,11 @@ func (podProbe *PodProbe) getPodResourceStat(pod *api.Pod, podContainers map[str
 	podNameWithNamespace := pod.Namespace + "/" + pod.Name
 
 	// get cpu frequency
-	cpuFrequency := nodeMachineInfoMap[pod.Spec.NodeName].CpuFrequency / 1000
+	machineInfo, ok := nodeMachineInfoMap[pod.Spec.NodeName]
+	if !ok {
+		return nil, fmt.Errorf("Cannot get machine information for %s", pod.Spec.NodeName)
+	}
+	cpuFrequency := machineInfo.CpuFrequency / 1000
 
 	// the cpu return value is in core*1000, so here should divide 1000
 	podCpuCapacity := float64(cpuCapacity) / 1000 * float64(cpuFrequency)
