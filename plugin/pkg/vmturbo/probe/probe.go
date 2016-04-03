@@ -27,8 +27,8 @@ func init() {
 	actionTestingFlag = flag.ActionTestingFlag
 	localTestStitchingIP = flag.LocalTestStitchingIP
 
-	glog.Infof("local %s", localTestingFlag)
-	glog.Infof("s IP %s", localTestStitchingIP)
+	glog.V(4).Infof("local %s", localTestingFlag)
+	glog.V(4).Infof("s IP %s", localTestStitchingIP)
 }
 
 type KubeProbe struct {
