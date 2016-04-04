@@ -9,8 +9,8 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/scheduler"
 
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/action"
-	vmtapi "k8s.io/kubernetes/plugin/pkg/vmturbo/api"
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/probe/helper"
+	// vmtapi "k8s.io/kubernetes/plugin/pkg/vmturbo/api"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/deploy"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/registry"
 	comm "k8s.io/kubernetes/plugin/pkg/vmturbo/vmturbocommunicator"
 
@@ -18,21 +18,6 @@ import (
 
 	"github.com/golang/glog"
 )
-
-var localTestingFlag bool = false
-
-var actionTestingFlag bool = false
-
-var localTestStitchingIP string = ""
-
-func init() {
-	flag, err := helper.LoadTestingFlag("./plugin/pkg/vmturbo/probe/helper/testing_flag.json")
-	if err != nil {
-		glog.Errorf("Error initialize vmturbo package")
-		return
-	}
-	localTestingFlag = flag.LocalTestingFlag
-}
 
 type VMTurboService struct {
 	config       *Config
@@ -172,14 +157,23 @@ func (v *VMTurboService) getNextPod() {
 }
 
 func (vmtService *VMTurboService) schedule(pod *api.Pod) {
+	var placementMap map[*api.Pod]string
 	placementMap, err := vmtService.getDestinationFromVmturbo(pod)
 	if err != nil {
-		glog.Errorf("Error scheduling pod: ", err)
-		return
+		glog.Errorf("Error scheduling pod using vmturbo service: %s", err)
+		dest, err := vmtScheduler.VMTScheduleHelper(pod)
+		if err != nil {
+			glog.Errorf("Error scheduling pod %s", pod.Namespace+"/"+pod.Name)
+			return
+		}
+		placementMap = make(map[*api.Pod]string)
+		placementMap[pod] = dest
 	}
 
+	sss := deploy.NewVMTScheduler(vmtService.config.Client)
+
 	for podToBeScheduled, destinationNodeName := range placementMap {
-		vmtScheduler.VMTSchedule(podToBeScheduled, destinationNodeName)
+		sss.VMTSchedule(podToBeScheduled, destinationNodeName)
 	}
 }
 
@@ -187,53 +181,11 @@ func (vmtService *VMTurboService) schedule(pod *api.Pod) {
 // TODO for now only deal with one pod at a time
 // But the result is a map. Will change later when deploy works.
 func (vmtService *VMTurboService) getDestinationFromVmturbo(pod *api.Pod) (map[*api.Pod]string, error) {
-
-	extCongfix := make(map[string]string)
-	extCongfix["Username"] = vmtService.config.Meta.OpsManagerUsername
-	extCongfix["Password"] = vmtService.config.Meta.OpsManagerPassword
-	// vmtapi.NewVmtApi(vmtService.config.Meta.ServerAddress, extCongfix)
-	vmturboApi := vmtapi.NewVmtApi(vmtService.config.Meta.ServerAddress, extCongfix)
-
-	requestSpec := getRequestSpec(pod)
+	deployRequest := deploy.NewDeployment(vmtService.config.Meta)
 
 	// reservationResult is map[string]string -- [podName]nodeName
 	// TODO !!!!!!! Now only support a single pod.
-	reservationResult, err := vmturboApi.RequestPlacement(pod.Name, requestSpec, nil)
-
-	//-----------------The following is for the test purpose-----------------
-	// After deploy framework works, it will get destination from vmt reservation api.
-	// reservationResult := make(map[string]string)
-	// dest, err := vmtScheduler.VMTScheduleHelper(pod)
-	if err != nil {
-		glog.Errorf("Error finding deploying destination: %s", err)
-		return nil, nil
-	}
-	// reservationResult[pod.Name] = dest
-
-	//-----------------------------------------------------------------------
-
-	placementMap := make(map[*api.Pod]string)
-	// currently only deal with one pod
-	if nodeName, ok := reservationResult[pod.Name]; ok {
-		if localTestingFlag {
-			nodeName = "127.0.0.1"
-		}
-		placementMap[pod] = nodeName
-	}
-	return placementMap, nil
-}
-
-// Get the request specification, basically the additional data that should be sent with post
-func getRequestSpec(pod *api.Pod) map[string]string {
-	requestSpec := make(map[string]string)
-	requestSpec["reservation_name"] = "kubernetesReservationTest"
-	requestSpec["num_instances"] = "1"
-	// TODO, here we must get the UUID or Name of PodProfile.
-	requestSpec["template_name"] = "DC5_1CxZMJkEEeCaJOYu5"
-
-	requestSpec["templateUuids[]"] = "DC5_1CxZMJkEEeCaJOYu5"
-
-	return requestSpec
+	return deployRequest.GetDestinationFromVmturbo(pod)
 }
 
 // Use a scheduler to bind or schedule

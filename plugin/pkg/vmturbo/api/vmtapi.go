@@ -5,10 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strings"
-	"time"
-
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/deploy"
 
 	"github.com/golang/glog"
 )
@@ -81,92 +77,16 @@ func (vmtApi *VmtApi) DiscoverTarget(nameOrAddress string) error {
 	return nil
 }
 
-// Create the reservation specification and
-// return map which has pod name as key and node name as value
-func (vmtApi *VmtApi) RequestPlacement(podName string, requestSpec, filterProperties map[string]string) (map[string]string, error) {
-	glog.V(4).Info("Inside RequestPlacement")
+func (vmtApi *VmtApi) Post(postUrl, requestDataString string) (string, error) {
+	return vmtApi.apiPost(postUrl, requestDataString)
+}
 
-	requestData := make(map[string]string)
+func (vmtApi *VmtApi) Get(getUrl string) (string, error) {
+	return vmtApi.apiGet(getUrl)
+}
 
-	var requestDataBuffer bytes.Buffer
-
-	if reservation_name, ok := requestSpec["reservation_name"]; !ok {
-		glog.Errorf("reservation name is not registered")
-		return nil, fmt.Errorf("reservation_name has not been registered.")
-	} else {
-		requestData["reservationName"] = reservation_name
-		requestDataBuffer.WriteString("?reservationName=")
-		requestDataBuffer.WriteString(reservation_name)
-		requestDataBuffer.WriteString("&")
-	}
-
-	if num_instances, ok := requestSpec["num_instances"]; !ok {
-		glog.Errorf("num_instances not registered.")
-		return nil, fmt.Errorf("num_instances has not been registered.")
-	} else {
-		requestData["count"] = num_instances
-		requestDataBuffer.WriteString("count=")
-		requestDataBuffer.WriteString(num_instances)
-		requestDataBuffer.WriteString("&")
-	}
-
-	if template_name, ok := requestSpec["template_name"]; !ok {
-		glog.Errorf("template name is not registered")
-		return nil, fmt.Errorf("template_name has not been registered.")
-	} else {
-		requestData["templateName"] = template_name
-		requestDataBuffer.WriteString("templateName=")
-		requestDataBuffer.WriteString(template_name)
-		requestDataBuffer.WriteString("&")
-	}
-
-	if templateUuids, ok := requestSpec["templateUuids[]"]; !ok {
-		glog.Errorf("templateUuids is not specified.")
-		//return nil, fmt.Errorf("deployment_profile has not been registered.")
-	} else {
-		requestData["templateUuids[]"] = templateUuids
-		requestDataBuffer.WriteString("templateUuids[]=")
-		requestDataBuffer.WriteString(templateUuids)
-		// requestDataBuffer.WriteString("&")
-	}
-
-	// // Append date and time
-	// requestDataBuffer.WriteString("deployDate=")
-	// // Must make sure space is escaped
-	// // TODO,
-	// requestDataBuffer.WriteString("2015-10-11%2016:00:00")
-
-	// requestDataBuffer.WriteString("templateUuids[]=")
-	// requestDataBuffer.WriteString("DC5_1CxZMJkEEeCaJOYu5")
-
-	s := requestDataBuffer.String()
-	glog.V(3).Infof("parameters are %s", s)
-	reservationUUID, err := vmtApi.apiPost("/reservations", s)
-	if err != nil {
-		return nil, fmt.Errorf("Error posting reservations: %s", err)
-	}
-	reservationUUID = strings.Replace(reservationUUID, "\n", "", -1)
-	glog.Infof("Reservation UUID is %s", string(reservationUUID))
-
-	time.Sleep(2 * time.Second)
-	getResponse, err := vmtApi.apiGet("/reservations/" + reservationUUID)
-	if err != nil {
-		return nil, fmt.Errorf("Error getting reservations destinations: %s", err)
-	}
-	pod2nodeMap, err := vmtApi.parseGettReservationResponse(podName, getResponse)
-	if err != nil {
-		return nil, fmt.Errorf("Error parsing reservation destination returned from VMTurbo server: %s", err)
-	}
-
-	// After getting the destination, delete the reservation.
-	deleteResponse, err := vmtApi.apiDelete("/reservations/" + reservationUUID)
-	if err != nil {
-		// Should we return without placement?
-		return nil, fmt.Errorf("Error deleting reservations destinations: %s", err)
-	}
-	glog.Infof("delete response of reservation %s is %s", reservationUUID, deleteResponse)
-
-	return pod2nodeMap, nil
+func (vmtApi *VmtApi) Delete(getUrl string) (string, error) {
+	return vmtApi.apiDelete(getUrl)
 }
 
 // call vmturbo api. return response
@@ -184,7 +104,7 @@ func (vmtApi *VmtApi) apiPost(postUrl, requestDataString string) (string, error)
 		return "", err
 	}
 
-	respContent, err := vmtApi.parseAPICallResponse(resp)
+	respContent, err := parseAPICallResponse(resp)
 	if err != nil {
 		glog.Errorf("Error getting response: %s", err)
 		return "", err
@@ -209,7 +129,7 @@ func (vmtApi *VmtApi) apiGet(getUrl string) (string, error) {
 		glog.Errorf("Error getting response: %s", err)
 		return "", err
 	}
-	respContent, err := vmtApi.parseAPICallResponse(resp)
+	respContent, err := parseAPICallResponse(resp)
 	if err != nil {
 		glog.Errorf("Error getting response: %s", err)
 		return "", err
@@ -233,7 +153,7 @@ func (vmtApi *VmtApi) apiDelete(getUrl string) (string, error) {
 		glog.Errorf("Error getting response: %s", err)
 		return "", err
 	}
-	respContent, err := vmtApi.parseAPICallResponse(resp)
+	respContent, err := parseAPICallResponse(resp)
 	if err != nil {
 		glog.Errorf("Error getting response: %s", err)
 		return "", err
@@ -244,7 +164,7 @@ func (vmtApi *VmtApi) apiDelete(getUrl string) (string, error) {
 }
 
 // this method takes in a reservation response and should return the reservation uuid, if there is any
-func (vmtApi *VmtApi) parseAPICallResponse(resp *http.Response) (string, error) {
+func parseAPICallResponse(resp *http.Response) (string, error) {
 	if resp == nil {
 		return "", fmt.Errorf("response sent in is nil")
 	}
@@ -259,23 +179,6 @@ func (vmtApi *VmtApi) parseAPICallResponse(resp *http.Response) (string, error) 
 
 	// TODO should parse the content. Currently don't know the correct post response content.
 	return string(content), nil
-}
-
-// this method takes in a http get response for reservation and should return the reservation uuid, if there is any
-func (vmtApi *VmtApi) parseGettReservationResponse(podName, content string) (map[string]string, error) {
-	if content == "" {
-		return nil, fmt.Errorf("No valid reservation result.")
-	}
-	// Decode reservation content.
-	dest, err := deploy.GetPodReservationDestination(content)
-	if err != nil {
-		return nil, err
-	}
-	glog.V(3).Infof("Deploy destination for Pod %s is %s", podName, dest)
-	// TODO should parse the content. Currently don't know the correct get response content.
-	pod2NodeMap := make(map[string]string)
-	pod2NodeMap[podName] = dest
-	return pod2NodeMap, nil
 }
 
 func NewVmtApi(url string, externalConfiguration map[string]string) *VmtApi {
