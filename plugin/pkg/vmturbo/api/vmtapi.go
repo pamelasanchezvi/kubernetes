@@ -120,14 +120,14 @@ func (vmtApi *VmtApi) RequestPlacement(podName string, requestSpec, filterProper
 		requestDataBuffer.WriteString("&")
 	}
 
-	if deployment_profile, ok := requestSpec["deployment_profile"]; !ok {
-		glog.Errorf("Deployment profile is not registered.")
+	if templateUuids, ok := requestSpec["templateUuids[]"]; !ok {
+		glog.Errorf("templateUuids is not specified.")
 		//return nil, fmt.Errorf("deployment_profile has not been registered.")
 	} else {
-		requestData["deploymentProfile"] = deployment_profile
-		requestDataBuffer.WriteString("deploymentProfile=")
-		requestDataBuffer.WriteString(deployment_profile)
-		requestDataBuffer.WriteString("&")
+		requestData["templateUuids[]"] = templateUuids
+		requestDataBuffer.WriteString("templateUuids[]=")
+		requestDataBuffer.WriteString(templateUuids)
+		// requestDataBuffer.WriteString("&")
 	}
 
 	// // Append date and time
@@ -136,8 +136,9 @@ func (vmtApi *VmtApi) RequestPlacement(podName string, requestSpec, filterProper
 	// // TODO,
 	// requestDataBuffer.WriteString("2015-10-11%2016:00:00")
 
-	requestDataBuffer.WriteString("templateUuids[]=")
-	requestDataBuffer.WriteString("DC5_1CxZMJkEEeCdJOYu5")
+	// requestDataBuffer.WriteString("templateUuids[]=")
+	// requestDataBuffer.WriteString("DC5_1CxZMJkEEeCaJOYu5")
+
 	s := requestDataBuffer.String()
 	glog.V(3).Infof("parameters are %s", s)
 	reservationUUID, err := vmtApi.apiPost("/reservations", s)
@@ -156,6 +157,15 @@ func (vmtApi *VmtApi) RequestPlacement(podName string, requestSpec, filterProper
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing reservation destination returned from VMTurbo server: %s", err)
 	}
+
+	// After getting the destination, delete the reservation.
+	deleteResponse, err := vmtApi.apiDelete("/reservations/" + reservationUUID)
+	if err != nil {
+		// Should we return without placement?
+		return nil, fmt.Errorf("Error deleting reservations destinations: %s", err)
+	}
+	glog.Infof("delete response of reservation %s is %s", reservationUUID, deleteResponse)
+
 	return pod2nodeMap, nil
 }
 
@@ -205,6 +215,30 @@ func (vmtApi *VmtApi) apiGet(getUrl string) (string, error) {
 		return "", err
 	}
 	glog.V(3).Infof("Get Succeed: %s", string(respContent))
+	defer resp.Body.Close()
+	return respContent, nil
+}
+
+// Delete API call
+func (vmtApi *VmtApi) apiDelete(getUrl string) (string, error) {
+	fullUrl := "http://" + vmtApi.vmtUrl + "/vmturbo/api" + getUrl
+	glog.V(4).Info("The full Url is ", fullUrl)
+	req, err := http.NewRequest("DELETE", fullUrl, nil)
+
+	req.SetBasicAuth(vmtApi.extConfig["Username"], vmtApi.extConfig["Password"])
+	glog.V(4).Info(req)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		glog.Errorf("Error getting response: %s", err)
+		return "", err
+	}
+	respContent, err := vmtApi.parseAPICallResponse(resp)
+	if err != nil {
+		glog.Errorf("Error getting response: %s", err)
+		return "", err
+	}
+	glog.V(3).Infof("DELETE call Succeed: %s", string(respContent))
 	defer resp.Body.Close()
 	return respContent, nil
 }

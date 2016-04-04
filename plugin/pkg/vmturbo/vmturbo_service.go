@@ -229,9 +229,9 @@ func getRequestSpec(pod *api.Pod) map[string]string {
 	requestSpec["reservation_name"] = "kubernetesReservationTest"
 	requestSpec["num_instances"] = "1"
 	// TODO, here we must get the UUID or Name of PodProfile.
-	requestSpec["template_name"] = "DC5_1CxZMJkEEeCdJOYu5"
+	requestSpec["template_name"] = "DC5_1CxZMJkEEeCaJOYu5"
 
-	requestSpec["templateUuids[]"] = "DC5_1CxZMJkEEeCdJOYu5"
+	requestSpec["templateUuids[]"] = "DC5_1CxZMJkEEeCaJOYu5"
 
 	return requestSpec
 }
