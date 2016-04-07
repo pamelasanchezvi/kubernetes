@@ -6,21 +6,35 @@ metadata:
     name: cadvisor
 spec:
   containers:
-  - name: cadvisor_2
+  - name: cadvisor
     image: google/cadvisor:latest
-    command:
-      - /bin/kubeturbo
-    args:
-      - --v=3
-      - --master=10.10.150.150:8080
-      - --etcd-servers=http://10.10.150.150:2379
-      - --config-path=/etc/kubeturbo/config
+    ports:
+      - name: http
+        containerPort: 8080
+        hostPort: 9999
     volumeMounts:
-    - name: vmt-config
-      mountPath: /etc/kubeturbo
-      readOnly: true
+      - name: rootfs
+        mountPath: /rootfs
+        readOnly: true
+      - name: varrun
+        mountPath: /var/run
+        readOnly: false
+      - name: varlibdocker
+        mountPath: /var/lib/docker
+        readOnly: true
+      - name: sysfs
+        mountPath: /sys
+        readOnly: true
   volumes:
-  - name: vmt-config
-    hostPath:
-      path: /etc/kubeturbo
-  restartPolicy: Always
+    - name: rootfs
+      hostPath:
+        path: /
+    - name: varrun
+      hostPath:
+        path: /var/run
+    - name: varlibdocker
+      hostPath:
+        path: /var/lib/docker
+    - name: sysfs
+      hostPath:
+        path: /sys
