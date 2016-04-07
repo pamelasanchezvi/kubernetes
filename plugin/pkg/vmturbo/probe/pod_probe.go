@@ -117,7 +117,8 @@ func (podProbe *PodProbe) groupContainerByPod() (map[string][]*vmtAdvisor.Contai
 		// Only get subcontainers.
 		subcontainers, _, err := cadvisor.GetAllContainers(*host, time.Now(), time.Now())
 		if err != nil {
-			return nil, err
+			glog.Errorf("Error when grouping containers according to pod. %s", err)
+			continue
 		}
 
 		// Map container to each pod. Key is pod name, value is container.

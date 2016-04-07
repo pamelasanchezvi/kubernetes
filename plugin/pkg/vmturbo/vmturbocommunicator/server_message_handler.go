@@ -6,14 +6,15 @@ import (
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/labels"
+	"k8s.io/kubernetes/pkg/util"
 
+	vmtaction "k8s.io/kubernetes/plugin/pkg/vmturbo/action"
 	vmtapi "k8s.io/kubernetes/plugin/pkg/vmturbo/api"
 	vmtmeta "k8s.io/kubernetes/plugin/pkg/vmturbo/metadata"
-
-	comm "github.com/vmturbo/vmturbo-go-sdk/communicator"
-	vmtaction "k8s.io/kubernetes/plugin/pkg/vmturbo/action"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/probe"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
+
+	comm "github.com/vmturbo/vmturbo-go-sdk/communicator"
 
 	"github.com/golang/glog"
 )
@@ -75,21 +76,26 @@ func (handler *KubernetesServerMessageHandler) Validate(serverMsg *comm.Mediatio
 	handler.DiscoverTarget()
 }
 
-var count int32 = 0
+func (handler *KubernetesServerMessageHandler) keepDiscoverAlive(messageID int32) {
+	//
+	glog.V(3).Infof("Keep Alive")
+
+	keepAliveMsg := &comm.KeepAlive{}
+	clientMsg := comm.NewClientMessageBuilder(messageID).SetKeepAlive(keepAliveMsg).Create()
+
+	handler.wsComm.SendClientMessage(clientMsg)
+}
 
 // DiscoverTopology receives a discovery request from server and start probing the k8s.
 func (handler *KubernetesServerMessageHandler) DiscoverTopology(serverMsg *comm.MediationServerMessage) {
 	//Discover the kubernetes topology
 	glog.V(3).Infof("Discover topology request from server.")
-	glog.V(3).Infof("count is %d", count)
-	if count < 1 {
-		count++
-
-		// return
-	}
 
 	// 1. Get message ID
 	messageID := serverMsg.GetMessageID()
+	var stopCh chan struct{} = make(chan struct{})
+	go util.Until(func() { handler.keepDiscoverAlive(messageID) }, time.Second*10, stopCh)
+	defer close(stopCh)
 
 	// 2. Build discoverResponse
 	// must have kubeClient to do ParseNode and ParsePod

@@ -78,7 +78,10 @@ func (nodeProbe *NodeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 	glog.V(3).Infof("---------- Now parse Node ----------")
 
 	for _, node := range nodes {
-		// First, use cAdvisor to get node info
+		if !nodeIsReady(node) {
+			continue
+		}
+		// use cAdvisor to get node info
 		nodeProbe.parseNodeIP(node)
 		hostSet[node.Name] = nodeProbe.getHost(node.Name)
 
@@ -107,11 +110,21 @@ func (nodeProbe *NodeProbe) parseNodeFromK8s(nodes []*api.Node) (result []*sdk.E
 	return
 }
 
+func nodeIsReady(node *api.Node) bool {
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == api.NodeReady {
+			return condition.Status == api.ConditionTrue
+		}
+	}
+	glog.Errorf("Node %s does not have Ready status.", node.Name)
+	return false
+}
+
 func (nodeProbe *NodeProbe) createCommoditySold(node *api.Node) ([]*sdk.CommodityDTO, error) {
 	var commoditiesSold []*sdk.CommodityDTO
 	nodeResourceStat, err := nodeProbe.getNodeResourceStat(node)
 	if err != nil {
-		return commoditiesSold, nil
+		return commoditiesSold, err
 	}
 	nodeID := string(node.UID)
 
@@ -252,7 +265,7 @@ func (this *NodeProbe) getNodeResourceStat(node *api.Node) (*NodeResourceStat, e
 	host := this.getHost(node.Name)
 	machineInfo, err := cadvisor.GetMachineInfo(*host)
 	if err != nil {
-		return nil, fmt.Errorf("Error getting machineInfo from %s", node.Name)
+		return nil, fmt.Errorf("Error getting machineInfo for %s: %s", node.Name, err)
 	}
 	// The return cpu frequency is in KHz, we need MHz
 	cpuFrequency := machineInfo.CpuFrequency / 1000
@@ -261,7 +274,7 @@ func (this *NodeProbe) getNodeResourceStat(node *api.Node) (*NodeResourceStat, e
 	// Here we only need the root container.
 	_, root, err := cadvisor.GetAllContainers(*host, time.Now(), time.Now())
 	if err != nil {
-		// return nil, err
+		return nil, fmt.Errorf("Error getting root container info for %s: %s", node.Name, err)
 	}
 	containerStats := root.Stats
 	// To get a valid cpu usage, there must be at least 2 valid stats.
