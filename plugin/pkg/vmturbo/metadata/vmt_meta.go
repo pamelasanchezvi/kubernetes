@@ -11,7 +11,7 @@ import (
 const (
 	// Appliance address.
 
-	SERVER_ADDRESS string = "10.10.200.114:8080"
+	SERVER_ADDRESS string = ""
 
 	TARGET_TYPE string = "Kubernetes"
 
