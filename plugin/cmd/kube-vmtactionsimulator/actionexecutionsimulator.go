@@ -36,7 +36,7 @@ func main() {
 	namespace := simulator.Namespace()
 
 	// The simulator can simulate move, get and provision action now.
-	actor := vmtaction.NewKubeActor(simulator.KubeClient())
+	actor := vmtaction.NewKubeActor(simulator.KubeClient(), simulator.Etcd())
 	if action == "move" || action == "Move " {
 		podToMove := simulator.PodToMove()
 		destinationNode := simulator.Destination()

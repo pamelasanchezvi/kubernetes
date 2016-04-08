@@ -18,7 +18,7 @@ import (
 	"github.com/golang/glog"
 )
 
-// KubernetesActionExecutor is responsilbe for executing different kinds of action requested by vmt server.
+// KubernetesActionExecutor is responsilbe for executing different kinds of actions requested by vmt server.
 type KubernetesActionExecutor struct {
 	KubeClient  *client.Client
 	EtcdStorage storage.Storage
@@ -104,9 +104,10 @@ func (kae *KubernetesActionExecutor) ExcuteAction(actionItem *sdk.ActionItemDTO,
 }
 
 // Create new VMT Actor. Must specify the kubernetes client.
-func NewKubeActor(client *client.Client) *KubernetesActionExecutor {
+func NewKubeActor(client *client.Client, etcdStorage storage.Storage) *KubernetesActionExecutor {
 	return &KubernetesActionExecutor{
-		KubeClient: client,
+		KubeClient:  client,
+		EtcdStorage: etcdStorage,
 	}
 }
 

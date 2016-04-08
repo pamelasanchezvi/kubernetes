@@ -94,7 +94,7 @@ func (v *VMTurboService) getNextPod() {
 		glog.Errorf("Error posting vmtevent: %s\n", errorPost)
 	}
 
-	go vmtEvents.Watch(0)
+	// go vmtEvents.Watch(0)
 
 	// getEvent, err := vmtEvents.Get()
 	// if err != nil {
