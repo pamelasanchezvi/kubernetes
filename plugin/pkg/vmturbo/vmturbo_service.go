@@ -96,15 +96,22 @@ func (v *VMTurboService) getNextPod() {
 		glog.Errorf("Error posting vmtevent: %s\n", errorPost)
 	}
 
-	// ----------------- try channel and vmtevent -------------
 	select {
 	case vmtEventFromEtcd := <-v.vmtEventChan:
+		glog.V(3).Infof("Receive VMTEvent")
+
+		hasError := false
 		switch vmtEventFromEtcd.ActionType {
 		case "move":
-			glog.V(2).Infof("Pod %s/%s is to be scheduled to %s as a result of MOVE action",
-				pod.Namespace, pod.Name, vmtEventFromEtcd.Destination)
 
-			v.vmtScheduler.VMTSchedule(pod, vmtEventFromEtcd.Destination)
+			if validatePodToBeMoved(pod, vmtEventFromEtcd) {
+				glog.V(2).Infof("Pod %s/%s is to be scheduled to %s as a result of MOVE action",
+					pod.Namespace, pod.Name, vmtEventFromEtcd.Destination)
+
+				v.vmtScheduler.VMTSchedule(pod, vmtEventFromEtcd.Destination)
+			} else {
+				hasError = true
+			}
 
 			break
 		case "provision":
@@ -113,24 +120,62 @@ func (v *VMTurboService) getNextPod() {
 			// double check if the pod is created as the result of provision
 			hasPrefix := strings.HasPrefix(pod.Name, vmtEventFromEtcd.TargetSE)
 			if !hasPrefix {
+				hasError = true
 				break
 			}
 			v.schedule(pod)
 		}
-		// TODO, at this point, we really do not know if the assignment of the pod succeeds or not.
-		// The right place of sending move reponse is after the event.
-		// Here for test purpose, send the move success action response.
-		if vmtEventFromEtcd.VMTMessageID > -1 {
-			glog.V(3).Infof("Send action response to VMTurbo server.")
-			progress := int32(100)
-			v.vmtcomm.SendActionReponse(sdk.ActionResponseState_SUCCEEDED, progress, int32(vmtEventFromEtcd.VMTMessageID), "Success")
+
+		if hasError {
+			// TODO, send back action failed. Then simple deploy the pod using scheduler.
+			glog.V(2).Infof("Action failed")
+			v.vmtcomm.SendActionReponse(sdk.ActionResponseState_FAILED, int32(0), int32(vmtEventFromEtcd.VMTMessageID), "Failed")
+
+			break
+		} else {
+			// TODO, at this point, we really do not know if the assignment of the pod succeeds or not.
+			// The right place of sending move reponse is after the event.
+			// Here for test purpose, send the move success action response.
+			if vmtEventFromEtcd.VMTMessageID > -1 {
+				glog.V(3).Infof("Send action response to VMTurbo server.")
+				progress := int32(100)
+				v.vmtcomm.SendActionReponse(sdk.ActionResponseState_SUCCEEDED, progress, int32(vmtEventFromEtcd.VMTMessageID), "Success")
+			}
+			v.vmtcomm.DiscoverTarget()
 		}
-		v.vmtcomm.DiscoverTarget()
 		return
 	default:
 		glog.V(3).Infof("No VMTEvent from ETCD. Simply schedule the pod.")
 	}
 	v.schedule(pod)
+}
+
+func validatePodToBeMoved(pod *api.Pod, vmtEvent *registry.VMTEvent) bool {
+	// TODO. Now based on name.
+	eventPodNamespace := vmtEvent.Namespace
+	eventPodName := vmtEvent.TargetSE
+	eventPodNamePartials := strings.Split(eventPodName, "-")
+	if len(eventPodNamePartials) < 2 {
+		return false
+	}
+	eventPodPrefix := eventPodNamespace + "/" + eventPodNamePartials[0]
+
+	podNamespace := pod.Namespace
+	podName := pod.Name
+	podNamePartials := strings.Split(podName, "-")
+	if len(podNamePartials) < 2 {
+		return false
+	}
+	podPrefix := podNamespace + "/" + podNamePartials[0]
+
+	if eventPodPrefix == podPrefix {
+		return true
+	} else {
+		glog.Warningf("Not the correct pod to be moved. Want to move %s/%s, but get %s/%s."+
+			"Now just to schedule it using scheduler.",
+			eventPodNamespace, eventPodName, pod.Namespace, pod.Name)
+		return false
+	}
 }
 
 func (vmtService *VMTurboService) schedule(pod *api.Pod) {
