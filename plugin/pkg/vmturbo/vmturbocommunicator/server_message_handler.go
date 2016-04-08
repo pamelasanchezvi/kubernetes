@@ -159,5 +159,8 @@ func (handler *KubernetesServerMessageHandler) HandleAction(serverMsg *comm.Medi
 		KubeClient:  handler.kubeClient,
 		EtcdStorage: handler.etcdStorage,
 	}
-	actionExecutor.ExcuteAction(actionItemDTO, messageID)
+	err := actionExecutor.ExcuteAction(actionItemDTO, messageID)
+	if err != nil {
+		glog.Errorf("Error execute action: %s", err)
+	}
 }

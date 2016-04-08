@@ -24,50 +24,75 @@ type KubernetesActionExecutor struct {
 	EtcdStorage storage.Storage
 }
 
-// Switch between different kinds of the action according to action request and call the actually corresponding
-// action execution method.
-func (kae *KubernetesActionExecutor) ExcuteAction(actionItem *sdk.ActionItemDTO, msgID int32) error {
-	if actionItem == nil {
-		return fmt.Errorf("ActionItem sent in is null")
+// Create new VMT Actor. Must specify the kubernetes client.
+func NewKubeActor(client *client.Client, etcdStorage storage.Storage) *KubernetesActionExecutor {
+	return &KubernetesActionExecutor{
+		KubeClient:  client,
+		EtcdStorage: etcdStorage,
 	}
+}
+
+// Switch between different types of the actions. Then call the actually corresponding execution method.
+func (this *KubernetesActionExecutor) ExcuteAction(actionItem *sdk.ActionItemDTO, msgID int32) error {
+	if actionItem == nil {
+		return fmt.Errorf("ActionItem received in is null")
+	}
+	glog.V(3).Infof("Receive a %s action request.", actionItem.GetActionType())
 
 	if actionItem.GetActionType() == sdk.ActionItemDTO_MOVE {
-		// check if the targetSE is a Pod and the newSE is a VirtualMachine
-		// TODO, for now, we use container to represent a pod
-		glog.V(3).Infof("Now Move Pods.")
-		if actionItem.GetTargetSE().GetEntityType() == sdk.EntityDTO_CONTAINER_POD && actionItem.GetNewSE().GetEntityType() == sdk.EntityDTO_VIRTUAL_MACHINE {
-			targetPod := actionItem.GetTargetSE()
-			podIdentifier := targetPod.GetId()
+		glog.V(4).Infof("Now moving pod")
+		// Here we must make sure the TargetSE is a Pod and NewSE is either a VirtualMachine or a PhysicalMachine.
+		if actionItem.GetTargetSE().GetEntityType() == sdk.EntityDTO_CONTAINER_POD {
+			newSEType := actionItem.GetNewSE().GetEntityType()
+			if newSEType == sdk.EntityDTO_VIRTUAL_MACHINE || newSEType == sdk.EntityDTO_PHYSICAL_MACHINE {
+				targetNode := actionItem.GetNewSE()
 
-			targetNode := actionItem.GetNewSE()
-			// nodeIdentifier := targetNode.GetId()
-			// K8s uses Ip address as the Identifier. The VM name passed by actionItem is the display name
-			// that dscovered by hypervisor. So here we must get the ip address from virtualMachineData in
-			// targetNode entityDTO.
-			vmData := targetNode.GetVirtualMachineData()
-			if vmData == nil {
-				return fmt.Errorf("Missing VirtualMachineData in ActionItemDTO from server")
-			}
-			machineIPs := vmData.GetIpAddress()
-			glog.Infof("The ip of targetNode is %v", machineIPs)
-			if machineIPs == nil {
-				return fmt.Errorf("Missing Ip addresses in ActionItemDTO from server")
-			}
-			// TODO, must find a way to validate IP address.
-			nodeIdentifier := machineIPs[0]
+				var machineIPs []string
 
-			// the pod identifier in vmt server is in "namespace/podname"
-			content := strings.Split(string(podIdentifier), "/")
-			if len(content) < 2 {
-				return fmt.Errorf("Error getting pod name and namespace.")
+				switch newSEType {
+				case sdk.EntityDTO_VIRTUAL_MACHINE:
+					// K8s uses Ip address as the Identifier. The VM name passed by actionItem is the display name
+					// that dscovered by hypervisor. So here we must get the ip address from virtualMachineData in
+					// targetNode entityDTO.
+					vmData := targetNode.GetVirtualMachineData()
+					if vmData == nil {
+						return fmt.Errorf("Missing VirtualMachineData in ActionItemDTO from server")
+					}
+					machineIPs = vmData.GetIpAddress()
+					break
+				case sdk.EntityDTO_PHYSICAL_MACHINE:
+					//TODO
+					// machineIPS = <valid physical machine IP>
+					break
+				}
+
+				glog.V(3).Infof("The IP of targetNode is %v", machineIPs)
+				if machineIPs == nil {
+					return fmt.Errorf("Miss IP addresses in ActionItemDTO.")
+				}
+
+				// Get the actual node name from Kubernetes cluster based on IP address.
+				nodeIdentifier, err := this.getNodeNameFromIP(machineIPs)
+				if err != nil {
+					return err
+				}
+
+				targetPod := actionItem.GetTargetSE()
+				podIdentifier := targetPod.GetId()
+
+				err = this.MovePod(podIdentifier, nodeIdentifier, msgID)
+				if err != nil {
+					return fmt.Errorf("Error move Pod %s: %s", podIdentifier, err)
+				}
+			} else {
+				return fmt.Errorf("The target service entity for move destiantion is neither a VM nor a PM.")
 			}
-			podNamespace := content[0]
-			podName := content[1]
-			glog.V(3).Infof("Now Moving Pod %s in namespace %s.", podName, podNamespace)
-			kae.MovePod(podName, podNamespace, nodeIdentifier, msgID)
+		} else {
+			return fmt.Errorf("The service entity to be moved is not a Pod")
 		}
+
 	} else if actionItem.GetActionType() == sdk.ActionItemDTO_PROVISION {
-		glog.V(3).Infof("Now Provision Pods")
+		glog.V(4).Infof("Now Provision Pods")
 		if actionItem.GetTargetSE().GetEntityType() == sdk.EntityDTO_CONTAINER_POD {
 			targetPod := actionItem.GetTargetSE()
 			podIdentifier := targetPod.GetId()
@@ -84,7 +109,7 @@ func (kae *KubernetesActionExecutor) ExcuteAction(actionItem *sdk.ActionItemDTO,
 				return fmt.Errorf("Cannot parse pod with name: %s", podIds[1])
 			}
 			replicationControllerName := podNames[0]
-			targetReplicationController, err := kae.getReplicationController(replicationControllerName, podNamespace)
+			targetReplicationController, err := this.getReplicationController(replicationControllerName, podNamespace)
 			if err != nil {
 				return fmt.Errorf("Error getting replication controller related to pod %s: %s", podIdentifier, err)
 			}
@@ -92,70 +117,70 @@ func (kae *KubernetesActionExecutor) ExcuteAction(actionItem *sdk.ActionItemDTO,
 				return fmt.Errorf("No replication controller defined with pod %s", podIdentifier)
 			}
 			currentReplica := targetReplicationController.Spec.Replicas
-			err = kae.ProvisionPods(targetReplicationController, currentReplica+1, msgID)
+			err = this.ProvisionPods(targetReplicationController, currentReplica+1, msgID)
 			if err != nil {
 				return fmt.Errorf("Error provision pod %s: %s", podIdentifier, err)
 			}
 		}
-
+	} else {
+		return fmt.Errorf("Action %s not supported", actionItem.GetActionType())
 	}
-
 	return nil
 }
 
-// Create new VMT Actor. Must specify the kubernetes client.
-func NewKubeActor(client *client.Client, etcdStorage storage.Storage) *KubernetesActionExecutor {
-	return &KubernetesActionExecutor{
-		KubeClient:  client,
-		EtcdStorage: etcdStorage,
+// Move is such an action that should be excuted in the following order:
+// 1. Delete the Pod to be moved.
+// 2. Replication controller will automatically create a new replica and post to api server.
+// 3. At the same time create a VMTEvent, containing move action info, and post it to etcd.
+// 4. Pod watcher in the vmturbo-service find the new Pod and the new VMTEvent.
+// 5. Schedule Pod according to move action.
+// This method delete the pod and create a VMTEvent.
+func (this *KubernetesActionExecutor) MovePod(podIdentifier, targetNodeIdentifier string, msgID int32) error {
+	// Pod identifier in vmt server passed from VMTurbo server is in "namespace/podname"
+	idArray := strings.Split(string(podIdentifier), "/")
+	if len(idArray) < 2 {
+		return fmt.Errorf("Invalid Pod identifier: %s", podIdentifier)
 	}
-}
+	podNamespace := idArray[0]
+	podName := idArray[1]
 
-// Move is such an action that should be excuted as first delete the particular pod
-// then replication controller will create a new replica. The place to deploy the replica
-// should be generated from vmt server.
-func (this *KubernetesActionExecutor) MovePod(podIdentifier, namespace, targetNodeIdentifier string, msgID int32) (err error) {
-	KubeClient := this.KubeClient
-
-	glog.V(4).Infof("Now K8s trys to  move pod %s.\n", podIdentifier)
-	// TODO !!!For test purpose, delete the first pod
-	if podIdentifier == "" {
-		return fmt.Errorf("Pod identifier should not be empty.\n")
+	if podName == "" {
+		return fmt.Errorf("Pod name should not be empty.\n")
 	}
-	if namespace == "" {
-		glog.Warningf("Namespace is not specified. Use the default namespance.\n")
+	if podNamespace == "" {
+		return fmt.Errorf("Pod namespace should not be empty.\n")
 	}
 	if targetNodeIdentifier == "" {
-		glog.Warningf("Destination is not specified. Schedule to original host.\n")
-	}
-	err = KubeClient.Pods(namespace).Delete(podIdentifier, nil)
-	if err != nil {
-		glog.Errorf("Error when deleting pod %s: %s.\n", podIdentifier, err)
-	} else {
-		glog.V(3).Infof("Successfully delete pod %s.\n", podIdentifier)
+		return fmt.Errorf("Target node identifier should not be empty.\n")
 	}
 
-	// if targetNodeIdentifier == "1.1.1.1" {
-	// 	targetNodeIdentifier = "127.0.0.1"
-	// }
+	glog.V(3).Infof("Now Moving Pod %s in namespace %s.", podName, podNamespace)
+
+	// Delete pod
+	err := this.KubeClient.Pods(podNamespace).Delete(podName, nil)
+	if err != nil {
+		glog.Errorf("Error deleting pod %s: %s.\n", podName, err)
+		return fmt.Errorf("Error deleting pod %s: %s.\n", podName, err)
+	} else {
+		glog.V(3).Infof("Successfully delete pod %s.\n", podName)
+	}
+
+	action := "move"
 
 	// TODO! For now the move aciton is accomplished by the MoveSimulator.
-	moveSimulator := &MoveSimulator{}
-	action := "move"
-	moveSimulator.SimulateMove(action, podIdentifier, targetNodeIdentifier, msgID)
+	// moveSimulator := &MoveSimulator{}
+	// moveSimulator.SimulateMove(action, podName, targetNodeIdentifier, msgID)
 
-	//------------------------------------------------------------------------------
-	// The desired move scenario is using etcd.
-	// Here it first post action event onto etcd. Then other component watches etcd will get the move event.
+	// Create VMTEvent and post onto etcd.
 	vmtEvents := registry.NewVMTEvents(this.KubeClient, "", this.EtcdStorage)
-	event := registry.GenerateVMTEvent(action, namespace, podIdentifier, targetNodeIdentifier, int(msgID))
-	glog.V(3).Infof("vmt event is %v, msgId is %d, %d", event, msgID, int(msgID))
+	event := registry.GenerateVMTEvent(action, podNamespace, podName, targetNodeIdentifier, int(msgID))
+	glog.V(3).Infof("vmt event is %++v, with msgId %d", event, msgID)
 	_, errorPost := vmtEvents.Create(event)
 	if errorPost != nil {
 		glog.Errorf("Error posting vmtevent: %s\n", errorPost)
+		fmt.Errorf("Error posting vmtevent: %s\n", errorPost)
 	}
-
-	return
+	return nil
 }
 
 // TODO. Thoughts. This is used to scale up and down. So we need the pod namespace and label here.
@@ -183,10 +208,6 @@ func (this *KubernetesActionExecutor) ProvisionPods(targetReplicationController 
 		return fmt.Errorf("Error updating replication controller %s: %s", targetReplicationController.Name, err)
 	}
 	glog.V(3).Infof("New replicas of %s is %d", newRC.Name, newRC.Spec.Replicas)
-
-	if msgID < 0 {
-		return
-	}
 
 	action := "provision"
 	vmtEvents := registry.NewVMTEvents(this.KubeClient, "", this.EtcdStorage)
@@ -232,18 +253,43 @@ func (this *KubernetesActionExecutor) GetAllRC(namespace string) (replicationCon
 }
 
 // Get all nodes currently in K8s.
-func (this *KubernetesActionExecutor) GetAllNodes() []*api.Node {
+func (this *KubernetesActionExecutor) GetAllNodes() ([]*api.Node, error) {
 	nodeList, err := this.KubeClient.Nodes().List(labels.Everything(), fields.Everything())
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	glog.V(5).Infof("NodeList is %v ", nodeList)
-
 	var nodeItems []*api.Node
 	for _, node := range nodeList.Items {
-		glog.V(3).Infof("Find a node %s ", node.Name)
-
 		nodeItems = append(nodeItems, &node)
 	}
-	return nodeItems
+	return nodeItems, nil
+}
+
+// Iterate all nodes to find the name of the node which has the provided IP address.
+// TODO. We can also create a IP->NodeName map to save time. But it consumes space.
+func (this *KubernetesActionExecutor) getNodeNameFromIP(machineIPs []string) (string, error) {
+	allNodes, err := this.GetAllNodes()
+	if err != nil {
+		return "", fmt.Errorf("Error listing all availabe nodes in Kubernetes: %s", err)
+	}
+	for _, node := range allNodes {
+		nodeAddresses := node.Status.Addresses
+		for _, nodeAddress := range nodeAddresses {
+			for _, machineIP := range machineIPs {
+				if nodeAddress.Address == machineIP {
+					return node.Name, nil
+				}
+			}
+		}
+
+	}
+
+	// If just test locally, return the name of local cluster node.
+	if localTestingFlag {
+		glog.V(3).Infof("Local testing. Didn't find node with IPs %s, will return name of local node", machineIPs)
+		localAddress := []string{"127.0.0.1"}
+		return this.getNodeNameFromIP(localAddress)
+	}
+
+	return "", fmt.Errorf("Cannot find node with IPs %s", machineIPs)
 }

@@ -8,7 +8,7 @@ import (
 	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/plugin/pkg/scheduler"
 
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/action"
+	// "k8s.io/kubernetes/plugin/pkg/vmturbo/action"
 	// vmtapi "k8s.io/kubernetes/plugin/pkg/vmturbo/api"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/deploy"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/registry"
@@ -23,6 +23,8 @@ type VMTurboService struct {
 	config       *Config
 	vmtcomm      *comm.VMTCommunicator
 	vmtEventChan chan *registry.VMTEvent
+	// VMTurbo Scheduler
+	vmtScheduler *deploy.VMTScheduler
 }
 
 func NewVMTurboService(c *Config) *VMTurboService {
@@ -30,6 +32,7 @@ func NewVMTurboService(c *Config) *VMTurboService {
 		config: c,
 	}
 	vmtService.vmtEventChan = make(chan *registry.VMTEvent)
+	vmtService.vmtScheduler = deploy.NewVMTScheduler(vmtService.config.Client)
 	return vmtService
 }
 
@@ -63,13 +66,12 @@ func (v *VMTurboService) Run() {
 	go util.Until(v.getNextVMTEvent, 0, v.config.StopEverything)
 }
 
-// When new node added in, this function is called. Otherwise, it is blocked.
 func (v *VMTurboService) getNextVMTEvent() {
 	event := v.config.VMTEventQueue.Pop().(*registry.VMTEvent)
-	glog.Infof("Get a new Event from etcd: %v", event)
+	glog.V(2).Infof("Get a new VMTEvent from etcd: %v", event)
 	if event.ActionType == "move" || event.ActionType == "provision" {
-		glog.V(2).Infof("Get a valid vmtevent from etcd.")
-
+		glog.V(2).Infof("VMTEvent must be handled.")
+		// Send VMTEvent to channel.
 		v.vmtEventChan <- event
 	}
 }
@@ -86,32 +88,26 @@ func (v *VMTurboService) getNextPod() {
 	pod := v.config.PodQueue.Pop().(*api.Pod)
 	glog.V(2).Infof("Get a new Pod %v", pod.Name)
 
-	// for test vmtevents etcd registry
+	// If we want to track new Pod, create a VMTEvent and post it to etcd.
 	vmtEvents := registry.NewVMTEvents(v.config.Client, "", v.config.EtcdStorage)
-	event := registry.GenerateVMTEvent("create", pod.Namespace, pod.Name, "1.0.0.0", 1)
+	event := registry.GenerateVMTEvent("create", pod.Namespace, pod.Name, "", 1)
 	_, errorPost := vmtEvents.Create(event)
 	if errorPost != nil {
 		glog.Errorf("Error posting vmtevent: %s\n", errorPost)
 	}
 
-	// go vmtEvents.Watch(0)
-
-	// getEvent, err := vmtEvents.Get()
-	// if err != nil {
-	// 	glog.Errorf("Error is %s", err)
-	// } // else {
-	// // 	// glog.Infof("Get %+v", getEvent)
-	// // }
-
 	// ----------------- try channel and vmtevent -------------
 	select {
 	case vmtEventFromEtcd := <-v.vmtEventChan:
-		if vmtEventFromEtcd.ActionType == "move" {
-			glog.V(3).Infof("Schedule destination from etcd is %s.", vmtEventFromEtcd.Destination)
-			glog.V(2).Infof("Move Pod %v to %s", pod.Name, vmtEventFromEtcd.Destination)
+		switch vmtEventFromEtcd.ActionType {
+		case "move":
+			glog.V(2).Infof("Pod %s/%s is to be scheduled to %s as a result of MOVE action",
+				pod.Namespace, pod.Name, vmtEventFromEtcd.Destination)
 
-			vmtScheduler.VMTSchedule(pod, vmtEventFromEtcd.Destination)
-		} else if vmtEventFromEtcd.ActionType == "provision" {
+			v.vmtScheduler.VMTSchedule(pod, vmtEventFromEtcd.Destination)
+
+			break
+		case "provision":
 			glog.V(3).Infof("Change replicas of %s.", vmtEventFromEtcd.TargetSE)
 
 			// double check if the pod is created as the result of provision
@@ -125,33 +121,14 @@ func (v *VMTurboService) getNextPod() {
 		// The right place of sending move reponse is after the event.
 		// Here for test purpose, send the move success action response.
 		if vmtEventFromEtcd.VMTMessageID > -1 {
-			glog.V(3).Infof("Get vmtevent %v", vmtEventFromEtcd)
-			glog.V(3).Infof("Send action response")
+			glog.V(3).Infof("Send action response to VMTurbo server.")
 			progress := int32(100)
 			v.vmtcomm.SendActionReponse(sdk.ActionResponseState_SUCCEEDED, progress, int32(vmtEventFromEtcd.VMTMessageID), "Success")
 		}
 		v.vmtcomm.DiscoverTarget()
 		return
-
 	default:
-		glog.V(3).Infof("Nothing from etcd. Try to use simulator.")
-		// This if block is for test move action only.
-		// if the pod is generated from move action, then after scheduler, it should avoid the following normal
-		// schedule and return
-		moveSimulator := &action.MoveSimulator{}
-		if destination, msgID := moveSimulator.IsMovePod(); destination != "" {
-			glog.V(2).Infof("Move Pod %v to %s", pod.Name, destination)
-
-			vmtScheduler.VMTSchedule(pod, destination)
-			// TODO, at this point, we really do not know if the assignment of the pod succeeds or not.
-			// The right place of sending move reponse is after the event.
-			// Here for test purpose, send the move success action response.
-			if msgID > -1 {
-				v.vmtcomm.SendActionReponse(sdk.ActionResponseState_SUCCEEDED, 100, msgID, "Success")
-			}
-			v.vmtcomm.DiscoverTarget()
-			return
-		}
+		glog.V(3).Infof("No VMTEvent from ETCD. Simply schedule the pod.")
 	}
 	v.schedule(pod)
 }
@@ -161,7 +138,7 @@ func (vmtService *VMTurboService) schedule(pod *api.Pod) {
 	placementMap, err := vmtService.getDestinationFromVmturbo(pod)
 	if err != nil {
 		glog.Errorf("Error scheduling pod using vmturbo service: %s", err)
-		dest, err := vmtScheduler.VMTScheduleHelper(pod)
+		dest, err := defaultScheduler.VMTScheduleHelper(pod)
 		if err != nil {
 			glog.Errorf("Error scheduling pod %s", pod.Namespace+"/"+pod.Name)
 			return
@@ -170,10 +147,8 @@ func (vmtService *VMTurboService) schedule(pod *api.Pod) {
 		placementMap[pod] = dest
 	}
 
-	sss := deploy.NewVMTScheduler(vmtService.config.Client)
-
 	for podToBeScheduled, destinationNodeName := range placementMap {
-		sss.VMTSchedule(podToBeScheduled, destinationNodeName)
+		vmtService.vmtScheduler.VMTSchedule(podToBeScheduled, destinationNodeName)
 	}
 }
 
@@ -190,13 +165,13 @@ func (vmtService *VMTurboService) getDestinationFromVmturbo(pod *api.Pod) (map[*
 
 // Use a scheduler to bind or schedule
 // TODO. This is not a good implementation. MUST Change
-var vmtScheduler *scheduler.Scheduler
+var defaultScheduler *scheduler.Scheduler
 
 func SetSchedulerInstance(s *scheduler.Scheduler) error {
 	if s == nil {
 		return fmt.Errorf("Error! No scheduler instance")
 	}
-	vmtScheduler = s
+	defaultScheduler = s
 	glog.V(3).Info("scheduler is set")
 	return nil
 }

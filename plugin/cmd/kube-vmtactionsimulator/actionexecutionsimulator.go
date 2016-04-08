@@ -38,9 +38,10 @@ func main() {
 	// The simulator can simulate move, get and provision action now.
 	actor := vmtaction.NewKubeActor(simulator.KubeClient(), simulator.Etcd())
 	if action == "move" || action == "Move " {
-		podToMove := simulator.PodToMove()
+		podName := simulator.PodToMove()
 		destinationNode := simulator.Destination()
-		actor.MovePod(podToMove, namespace, destinationNode, -1)
+		podIdentifier := namespace + "/" + podName
+		actor.MovePod(podIdentifier, destinationNode, -1)
 		return
 	} else if action == "get" {
 		actor.GetAllNodes()

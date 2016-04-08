@@ -54,7 +54,7 @@ func (e *vmtevents) create(obj interface{}) (interface{}, error) {
 	key := VMTEVENT_KEY_PREFIX + name
 	ttl := uint64(10000)
 
-	glog.Infof("Create vmtevent object")
+	glog.V(5).Infof("Create vmtevent object")
 	out := &VMTEvent{}
 	if err := e.etcdStorage.Create(key, obj, out, ttl); err != nil {
 		glog.Errorf("Error during create VMTEvent: %s", err)

@@ -237,7 +237,6 @@ func (w *etcdWatcher) decodeObject(node *etcd.Node) (interface{}, error) {
 }
 
 func (w *etcdWatcher) sendAdd(res *etcd.Response) {
-	glog.Info("In sendAdd")
 	if res.Node == nil {
 		glog.Errorf("unexpected nil node: %#v", res)
 		return
@@ -253,13 +252,13 @@ func (w *etcdWatcher) sendAdd(res *etcd.Response) {
 		// the resourceVersion to resume will never be able to get past a bad value.
 		return
 	}
-	glog.Infof("Obj is decoded as %v", obj)
+	glog.V(4).Infof("Obj is decoded as %v", obj)
 
 	// if !w.filter(obj) {
 	// 	glog.Infof("Failed during filter")
 	// 	return
 	// }
-	glog.Info("About to emit")
+	glog.V(4).Info("About to emit")
 	action := watch.Added
 	if res.Node.ModifiedIndex != res.Node.CreatedIndex {
 		action = watch.Modified
