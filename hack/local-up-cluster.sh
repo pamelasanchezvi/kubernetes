@@ -253,6 +253,7 @@ function start_kubelet {
         --container-runtime="${CONTAINER_RUNTIME}" \
         --hostname-override="127.0.0.1" \
         --address="127.0.0.1" \
+        --host-network-sources="*" \
         --cluster-dns="192.168.200.138" \
         --cluster-domain="kubernetes.local" \
         --api-servers="${API_HOST}:${API_PORT}" \

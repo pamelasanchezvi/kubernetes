@@ -138,8 +138,12 @@ func (s *VMTServer) Run(_ []string) error {
 	// }()
 
 	// serverAddr, targetType, nameOrAddress, targetIdentifier, password
-	vmtMeta := metadata.NewVMTMeta(s.MetaConfigPath)
-	glog.V(3).Infof("The vmt server address is %s", vmtMeta.ServerAddress)
+	vmtMeta, err := metadata.NewVMTMeta(s.MetaConfigPath)
+	if err != nil {
+		glog.Errorf("Get error when loading configurations: %s", err)
+		os.Exit(1)
+	}
+	glog.V(3).Infof("Finished loading configuration from %s", s.MetaConfigPath)
 
 	etcdclientBuilder := etcdhelper.NewEtcdClientBuilder().ServerList(s.EtcdServerList).SetTransport(s.EtcdCA, s.EtcdClientCertificate, s.EtcdClientKey)
 	etcdClient, err := etcdclientBuilder.CreateAndTest()
