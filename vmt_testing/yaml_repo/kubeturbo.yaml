@@ -7,12 +7,12 @@ metadata:
 spec:
   containers:
   - name: kubeturbo
-    image: vmturbo/kubeturbo
+    image: dongyiyang/kubeturbo:dev
     command:
       - /bin/kubeturbo
     args:
-      - --v=3
-      - --master=http://192.168.200.137:8080
+      - --v=4
+      - --master=http://10.10.200.114:8080
       - --etcd-servers=http://127.0.0.1:2379
       - --config-path=/etc/kubeturbo/config
     volumeMounts:
@@ -43,5 +43,5 @@ spec:
     emptyDir: {}
   - name: vmt-config
     hostPath:
-      path: /etc/kubeturbo
+      path: /home/dongyiyang/Sandbox/Go/src/k8s.io/kubernetes/vmt_testing/kubeturbo
   restartPolicy: Always
