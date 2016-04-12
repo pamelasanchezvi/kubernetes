@@ -17,15 +17,14 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
 	"runtime"
 
 	"k8s.io/kubernetes/pkg/healthz"
 	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/pkg/version/verflag"
-	schedulerserver "k8s.io/kubernetes/plugin/cmd/kube-scheduler/app"
 	"k8s.io/kubernetes/plugin/cmd/kube-vmturbo/app"
 
+	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 )
 
@@ -35,7 +34,7 @@ func init() {
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	fmt.Println("********** Run vmturbo service **********")
+	glog.V(2).Infof("*** Run Kubeturbo service ***")
 
 	s := app.NewVMTServer()
 	s.AddFlags(pflag.CommandLine)
@@ -48,20 +47,22 @@ func main() {
 
 	go runScheduler(s)
 
-	fmt.Println("********** Now after runScheduler **********")
 	s.Run(pflag.CommandLine.Args())
 }
 
-// Start Kubernetes Scheduler from VMT service.
+// Start default Kubernetes scheduler from VMT service.
+// Although Kubeturbo provides pod scheduling from VMturbo's reservation API, the default
+// Kubernetes scheduler serves as a backup when there is any issue getting deploy destination
+// from VMTurbo server.
 func runScheduler(vmtserver *app.VMTServer) {
+	glog.V(3).Infof("Creating default Kubernetes scheduler")
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	s := schedulerserver.NewVMTSchedulerServer(vmtserver)
-	s.Master = vmtserver.Master
-	s.Kubeconfig = vmtserver.Kubeconfig
-	//s.AddFlags(fs)
-	s.BindPodsQPS = 15.0
-	s.BindPodsBurst = 20
-	s.EnableProfiling = true
+	defaultSchedulerServer := app.NewDefaultK8sSchedulerServer(vmtserver)
+	defaultSchedulerServer.Master = vmtserver.Master
+	defaultSchedulerServer.Kubeconfig = vmtserver.Kubeconfig
+	defaultSchedulerServer.BindPodsQPS = 15.0
+	defaultSchedulerServer.BindPodsBurst = 20
+	defaultSchedulerServer.EnableProfiling = true
 
-	s.RunVMTScheduler(pflag.CommandLine.Args())
+	defaultSchedulerServer.RunDefaultK8sScheduler(pflag.CommandLine.Args())
 }
