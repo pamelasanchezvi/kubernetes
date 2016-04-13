@@ -91,7 +91,7 @@ func (podProbe *PodProbe) parsePodFromK8s(pods []*api.Pod) (result []*sdk.Entity
 		}
 
 		commoditiesSold := podProbe.getCommoditiesSold(pod, podResourceStat)
-		commoditiesBought := podProbe.getCommoditiesBought(podResourceStat)
+		commoditiesBought := podProbe.getCommoditiesBought(pod, podResourceStat)
 
 		entityDto, _ := podProbe.buildPodEntityDTO(pod, commoditiesSold, commoditiesBought)
 
@@ -245,7 +245,7 @@ func (podProbe *PodProbe) getCommoditiesSold(pod *api.Pod, podResourceStat *PodR
 }
 
 // Build commodityDTOs for commodity sold by the pod
-func (podProbe *PodProbe) getCommoditiesBought(podResourceStat *PodResourceStat) []*sdk.CommodityDTO {
+func (podProbe *PodProbe) getCommoditiesBought(pod *api.Pod, podResourceStat *PodResourceStat) []*sdk.CommodityDTO {
 	var commoditiesBought []*sdk.CommodityDTO
 	cpuAllocationCommBought := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_CPU_ALLOCATION).
 		Key("Container").
@@ -257,6 +257,14 @@ func (podProbe *PodProbe) getCommoditiesBought(podResourceStat *PodResourceStat)
 		Used(podResourceStat.memAllocationUsed).
 		Create()
 	commoditiesBought = append(commoditiesBought, memAllocationCommBought)
+	selectormap:=pod.Spec.NodeSelector
+	if( len(selectormap) > 0 ){
+		for key, value := range selectormap{
+                        str1 := key+"="+value
+                        accessComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_VMPM_ACCESS).Key(str1).Create()
+        	        commoditiesBought = append(commoditiesBought, accessComm)
+                }
+	}
 	return commoditiesBought
 }
 

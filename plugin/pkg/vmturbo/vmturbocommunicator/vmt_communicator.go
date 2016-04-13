@@ -121,6 +121,7 @@ func createSupplyChain() []*sdk.TemplateDTO {
 		Entity(sdk.EntityDTO_VIRTUAL_MACHINE).
 		Selling(sdk.CommodityDTO_CPU_ALLOCATION, fakeKey).
 		Selling(sdk.CommodityDTO_MEM_ALLOCATION, fakeKey).
+		Selling(sdk.CommodityDTO_VMPM_ACCESS, fakeKey).
 		Selling(sdk.CommodityDTO_VCPU, fakeKey).
 		Selling(sdk.CommodityDTO_VMEM, fakeKey).
 		Selling(sdk.CommodityDTO_APPLICATION, fakeKey)
@@ -144,11 +145,17 @@ func createSupplyChain() []*sdk.TemplateDTO {
 		Key:           &fakeKey,
 		CommodityType: &memAllocationType,
 	}
+	vmpmaccessType := sdk.CommodityDTO_VMPM_ACCESS
+	vmpmaccessTemplateComm := &sdk.TemplateCommodity{
+		Key: &fakeKey,
+		CommodityType: &vmpmaccessType,
+	}
 
 	podSupplyChainNodeBuilder = podSupplyChainNodeBuilder.
 		Provider(sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_LAYERED_OVER).
 		Buys(*cpuAllocationTemplateComm).
-		Buys(*memAllocationTemplateComm)
+		Buys(*memAllocationTemplateComm).
+		Buys(*vmpmaccessTemplateComm)
 	glog.V(3).Infof(".......... pod supply chain node builder is created ..........")
 
 	// Application supplychain builder
@@ -203,6 +210,7 @@ func createSupplyChain() []*sdk.TemplateDTO {
 	vmPodExtLinkBuilder.Link(sdk.EntityDTO_CONTAINER_POD, sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_LAYERED_OVER).
 		Commodity(cpuAllocationType, true).
 		Commodity(memAllocationType, true).
+		Commodity(vmpmaccessType, true).
 		ProbeEntityPropertyDef(sdk.SUPPLYCHAIN_CONSTANT_IP_ADDRESS, "IP Address where the Pod is running").
 		ExternalEntityPropertyDef(sdk.VM_IP)
 
