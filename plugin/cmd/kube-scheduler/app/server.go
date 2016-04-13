@@ -40,9 +40,6 @@ import (
 	latestschedulerapi "k8s.io/kubernetes/plugin/pkg/scheduler/api/latest"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/factory"
 
-	vmtserver "k8s.io/kubernetes/plugin/cmd/kube-vmturbo/app"
-	"k8s.io/kubernetes/plugin/pkg/vmturbo"
-
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/pflag"
@@ -165,71 +162,4 @@ func (s *SchedulerServer) createConfig(configFactory *factory.ConfigFactory) (*s
 	}
 
 	return configFactory.CreateFromProvider(s.AlgorithmProvider)
-}
-
-// ------------------------------------------------------
-// TODO: Test VMT Service interaction
-func NewVMTSchedulerServer(vmtServer *vmtserver.VMTServer) *SchedulerServer {
-	s := SchedulerServer{
-		Port:              vmtServer.Port,
-		Address:           net.ParseIP("127.0.0.1"),
-		AlgorithmProvider: factory.DefaultProvider,
-	}
-	return &s
-}
-
-// Run runs the specified SchedulerServer.  This should never exit.
-func (s *SchedulerServer) RunVMTScheduler(_ []string) error {
-	if s.Kubeconfig == "" && s.Master == "" {
-		glog.Warningf("Neither --kubeconfig nor --master was specified.  Using default API client.  This might not work.")
-	}
-
-	// This creates a client, first loading any specified kubeconfig
-	// file, and then overriding the Master flag, if non-empty.
-	kubeconfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: s.Kubeconfig},
-		&clientcmd.ConfigOverrides{ClusterInfo: clientcmdapi.Cluster{Server: s.Master}}).ClientConfig()
-	if err != nil {
-		return err
-	}
-	kubeconfig.QPS = 20.0
-	kubeconfig.Burst = 30
-
-	kubeClient, err := client.New(kubeconfig)
-	if err != nil {
-		glog.Fatalf("Invalid API configuration: %v", err)
-	}
-
-	go func() {
-		mux := http.NewServeMux()
-		healthz.InstallHandler(mux)
-		if s.EnableProfiling {
-			mux.HandleFunc("/debug/pprof/", pprof.Index)
-			mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
-			mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		}
-		mux.Handle("/metrics", prometheus.Handler())
-
-		server := &http.Server{
-			Addr:    net.JoinHostPort(s.Address.String(), strconv.Itoa(s.Port)),
-			Handler: mux,
-		}
-		glog.Fatal(server.ListenAndServe())
-	}()
-
-	configFactory := factory.NewConfigFactory(kubeClient, util.NewTokenBucketRateLimiter(s.BindPodsQPS, s.BindPodsBurst))
-	config, err := s.createConfig(configFactory)
-	if err != nil {
-		glog.Fatalf("Failed to create scheduler configuration: %v", err)
-	}
-
-	eventBroadcaster := record.NewBroadcaster()
-	config.Recorder = eventBroadcaster.NewRecorder(api.EventSource{Component: "scheduler"})
-	eventBroadcaster.StartLogging(glog.Infof)
-	eventBroadcaster.StartRecordingToSink(kubeClient.Events(""))
-
-	sched := scheduler.New(config)
-	vmturbo.SetSchedulerInstance(sched)
-
-	select {}
 }
