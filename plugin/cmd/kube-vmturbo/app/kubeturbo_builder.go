@@ -20,11 +20,13 @@ package app
 import (
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
 	"strconv"
+	"time"
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/api/latest"
@@ -177,6 +179,17 @@ func (s *VMTServer) Run(_ []string) error {
 	vmtConfig := vmturbo.NewVMTConfig(kubeClient, etcdStorage, vmtMeta)
 
 	vmtService := vmturbo.NewVMTurboService(vmtConfig)
+
+	// Make sure default scheduler is set. If certain time is passed, then there is a fatal error.
+	timeDelayFactor := 0
+	for defaultSchedulerInstance == nil && timeDelayFactor < 10 {
+		glog.V(3).Infof("Default scheduler is not set yet")
+		time.Sleep(time.Millisecond * 100 * time.Duration(math.Pow(2, float64(timeDelayFactor))))
+		timeDelayFactor += 1
+	}
+	if defaultSchedulerInstance == nil {
+		glog.Fatalf("Failed to set Default Scheduler. Exiting..")
+	}
 
 	vmtService.TurboScheduler.SetDefaultScheduler(defaultSchedulerInstance)
 
