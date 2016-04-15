@@ -129,8 +129,6 @@ func (w *etcdWatcher) etcdWatch(client tools.EtcdClient, key string, resourceVer
 			return
 		}
 		resourceVersion = latest + 1
-		glog.Infof("latest is %d, current version is %d", latest, resourceVersion)
-
 	}
 	response, err := client.Watch(key, resourceVersion, w.list, w.etcdIncoming, w.etcdStop)
 	glog.Infof("response is %v", response)

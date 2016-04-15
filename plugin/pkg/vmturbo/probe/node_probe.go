@@ -157,13 +157,13 @@ func (nodeProbe *NodeProbe) createCommoditySold(node *api.Node) ([]*sdk.Commodit
 		Key(nodeID).
 		Create()
 	commoditiesSold = append(commoditiesSold, appComm)
-	labelsmap:=node.ObjectMeta.Labels
-	if(len(labelsmap) > 0){
-		for key, value := range labelsmap{		
-			str1 := key+"="+value
-			glog.V(3).Infof("label for this Node is : %s", str1)
+	labelsmap := node.ObjectMeta.Labels
+	if len(labelsmap) > 0 {
+		for key, value := range labelsmap {
+			str1 := key + "=" + value
+			glog.V(4).Infof("label for this Node is : %s", str1)
 			accessComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_VMPM_ACCESS).Key(str1).Create()
-        		commoditiesSold = append(commoditiesSold, accessComm)
+			commoditiesSold = append(commoditiesSold, accessComm)
 		}
 	}
 	return commoditiesSold, nil

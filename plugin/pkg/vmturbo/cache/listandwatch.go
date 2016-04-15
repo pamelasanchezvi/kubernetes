@@ -17,7 +17,7 @@ limitations under the License.
 package cache
 
 import (
-	"reflect"
+	// "reflect"
 
 	"k8s.io/kubernetes/pkg/fields"
 	// "k8s.io/kubernetes/pkg/watch"
@@ -49,7 +49,7 @@ func NewListWatchFromStorage(s storage.Storage, resource string, namespace strin
 		return nil, nil
 
 		var list vmtruntime.VMTObject
-		glog.Infof("Type of list is %v", reflect.TypeOf(&list))
+		// glog.Infof("Type of list is %v", reflect.TypeOf(&list))
 		err := s.List(resource, list)
 		if err != nil {
 			glog.Infof("Error listing: %v", err)
@@ -61,7 +61,6 @@ func NewListWatchFromStorage(s storage.Storage, resource string, namespace strin
 	watchFunc := func(resourceVersion string) (watch.Interface, error) {
 		return s.Watch(resource, 0, nil)
 	}
-	glog.Info("Create ListWatch")
 	return &ListWatch{ListFunc: listFunc, WatchFunc: watchFunc}
 }
 

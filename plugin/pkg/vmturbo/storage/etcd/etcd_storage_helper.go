@@ -175,7 +175,7 @@ func (h *etcdHelper) Delete(key string, out interface{}) error {
 	// 		_, _, err = h.extractObj(response, err, out, false, true)
 	// 	}
 	// }
-	glog.V(3).Infof("Delete response is: %v", response)
+	glog.V(4).Infof("Delete response is: %v", response)
 	return err
 }
 
@@ -220,7 +220,7 @@ func (h *etcdHelper) isKeyExist(key string) (bool, error) {
 
 // bodyAndExtractObj performs the normal Get path to etcd, returning the parsed node and response for additional information
 // about the response, like the current etcd index and the ttl.
-func (h *etcdHelper) bodyAndExtractObj(key string, objPtr runtime.Object, ignoreNotFound bool) (body string, node *etcd.Node, res *etcd.Response, err error) {
+func (h *etcdHelper) bodyAndExtractObj(key string, objPtr vmtruntime.VMTObject, ignoreNotFound bool) (body string, node *etcd.Node, res *etcd.Response, err error) {
 	// startTime := time.Now()
 	response, err := h.client.Get(key, false, false)
 	// metrics.RecordEtcdRequestLatency("get", getTypeName(objPtr), startTime)
@@ -262,10 +262,10 @@ func (h *etcdHelper) extractObj(response *etcd.Response, inErr error, objPtr int
 }
 
 // Implements storage.Interface.
-func (h *etcdHelper) Get(key string, objPtr interface{}, ignoreNotFound bool) error {
+func (h *etcdHelper) Get(key string, objPtr vmtruntime.VMTObject, ignoreNotFound bool) error {
 	key = h.prefixEtcdKey(key)
-	// _, _, _, err := h.bodyAndExtractObj(key, objPtr, ignoreNotFound)
-	return nil
+	_, _, _, err := h.bodyAndExtractObj(key, objPtr, ignoreNotFound)
+	return err
 }
 
 // // Implements storage.Interface.
@@ -357,7 +357,6 @@ func (h *etcdHelper) List(key string, listObj vmtruntime.VMTObject) error {
 func (h *etcdHelper) listEtcdNode(key string) ([]*etcd.Node, uint64, error) {
 	result, err := h.client.Get(key, true, true)
 	if err != nil {
-		glog.Errorf("Error listing Etcd nodes %s", err)
 		// index, ok := etcdErrorIndex(err)
 		// if !ok {
 		// 	index = 0

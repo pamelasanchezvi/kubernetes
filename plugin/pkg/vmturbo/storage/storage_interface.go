@@ -8,7 +8,7 @@ import (
 type Storage interface {
 	Create(key string, obj, out interface{}, ttl uint64) error
 	List(key string, listObj vmtruntime.VMTObject) error
-	Get(key string, objPtr interface{}, ignoreNotFound bool) error
+	Get(key string, objPtr vmtruntime.VMTObject, ignoreNotFound bool) error
 	Delete(key string, out interface{}) error
 	Watch(key string, resourceVersion uint64, filter FilterFunc) (watch.Interface, error)
 }
