@@ -10,9 +10,10 @@ import (
 	"k8s.io/kubernetes/pkg/client/record"
 	"k8s.io/kubernetes/pkg/util"
 	"k8s.io/kubernetes/plugin/pkg/scheduler"
-	// "k8s.io/kubernetes/plugin/pkg/scheduler/algorithm"
 	"k8s.io/kubernetes/plugin/pkg/scheduler/metrics"
 
+	vmtmeta "k8s.io/kubernetes/plugin/pkg/vmturbo/metadata"
+	"k8s.io/kubernetes/plugin/pkg/vmturbo/scheduler/defaultscheduler"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/scheduler/vmtscheduler"
 
 	"github.com/golang/glog"
@@ -35,10 +36,10 @@ type TurboScheduler struct {
 	config *Config
 
 	vmtScheduler     *vmtscheduler.VMTScheduler
-	defaultScheduler *scheduler.Scheduler
+	defaultScheduler *defaultscheduler.DefaultScheduler
 }
 
-func NewTurboScheduler(kubeClient *client.Client) *TurboScheduler {
+func NewTurboScheduler(kubeClient *client.Client, vmturboMeta *vmtmeta.VMTMeta) *TurboScheduler {
 	scheduledPodLister := &cache.StoreToPodLister{}
 	podQueue := cache.NewFIFO(cache.MetaNamespaceKeyFunc)
 
@@ -58,20 +59,17 @@ func NewTurboScheduler(kubeClient *client.Client) *TurboScheduler {
 	eventBroadcaster.StartLogging(glog.Infof)
 	eventBroadcaster.StartRecordingToSink(kubeClient.Events(""))
 
+	vmtSched := vmtscheduler.NewVMTScheduler(kubeClient, vmturboMeta)
+	glog.V(3).Infof("VMTScheduler is set: %++v", vmtSched)
+
+	defaultSched := defaultscheduler.NewDefaultScheduler(kubeClient)
+	glog.V(3).Infof("DefaultScheduler is set: %++v", defaultSched)
+
 	return &TurboScheduler{
-		config: config,
+		config:           config,
+		vmtScheduler:     vmtSched,
+		defaultScheduler: defaultSched,
 	}
-}
-
-func (s *TurboScheduler) SetVMTScheduler(vmtscheduler *vmtscheduler.VMTScheduler) {
-	glog.V(3).Infof("VMTScheduler is set: %++v", vmtscheduler)
-
-	s.vmtScheduler = vmtscheduler
-}
-
-func (s *TurboScheduler) SetDefaultScheduler(sched *scheduler.Scheduler) {
-	glog.V(3).Infof("DefaultScheduler is set: %++v", sched)
-	s.defaultScheduler = sched
 }
 
 // In Schedule, it always first try to get schedule destination from VMTScheduler.

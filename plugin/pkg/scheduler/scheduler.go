@@ -187,14 +187,3 @@ func (s *Scheduler) scheduleOne() {
 
 	})
 }
-
-// TODO. This should be removed when the vmt reservation api works.
-// Call the built in schduling algorithm to schedule a pod
-func (s *Scheduler) FindDestination(pod *api.Pod) (string, error) {
-	dest, err := s.config.Algorithm.Schedule(pod, s.config.MinionLister)
-	if err != nil {
-		glog.Errorf("Error Scheduling pod %+v", pod)
-		return "", fmt.Errorf("Error Scheduling pod %+v", pod)
-	}
-	return dest, nil
-}

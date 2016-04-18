@@ -45,24 +45,5 @@ func main() {
 
 	verflag.PrintAndExitIfRequested()
 
-	go runScheduler(s)
-
 	s.Run(pflag.CommandLine.Args())
-}
-
-// Start default Kubernetes scheduler from VMT service.
-// Although Kubeturbo provides pod scheduling from VMturbo's reservation API, the default
-// Kubernetes scheduler serves as a backup when there is any issue getting deploy destination
-// from VMTurbo server.
-func runScheduler(vmtserver *app.VMTServer) {
-	glog.V(3).Infof("Creating default Kubernetes scheduler")
-	runtime.GOMAXPROCS(runtime.NumCPU())
-	defaultSchedulerServer := app.NewDefaultK8sSchedulerServer(vmtserver)
-	defaultSchedulerServer.Master = vmtserver.Master
-	defaultSchedulerServer.Kubeconfig = vmtserver.Kubeconfig
-	defaultSchedulerServer.BindPodsQPS = 15.0
-	defaultSchedulerServer.BindPodsBurst = 20
-	defaultSchedulerServer.EnableProfiling = true
-
-	defaultSchedulerServer.RunDefaultK8sScheduler(pflag.CommandLine.Args())
 }
