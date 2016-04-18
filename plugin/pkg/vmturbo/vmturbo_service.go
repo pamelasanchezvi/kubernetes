@@ -8,7 +8,6 @@ import (
 
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/registry"
 	turboscheduler "k8s.io/kubernetes/plugin/pkg/vmturbo/scheduler"
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/scheduler/vmtscheduler"
 	comm "k8s.io/kubernetes/plugin/pkg/vmturbo/vmturbocommunicator"
 
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"
@@ -25,28 +24,26 @@ type VMTurboService struct {
 }
 
 func NewVMTurboService(c *Config) *VMTurboService {
-	vmtService := &VMTurboService{
-		config: c,
+	turboSched := turboscheduler.NewTurboScheduler(c.Client, c.Meta)
+
+	vmtEventChannel := make(chan *registry.VMTEvent)
+
+	vmtCommunicator := comm.NewVMTCommunicator(c.Client, c.Meta, c.EtcdStorage)
+
+	return &VMTurboService{
+		config:         c,
+		vmtcomm:        vmtCommunicator,
+		vmtEventChan:   vmtEventChannel,
+		TurboScheduler: turboSched,
 	}
-	vmtService.vmtEventChan = make(chan *registry.VMTEvent)
-
-	turboSched := turboscheduler.NewTurboScheduler(c.Client)
-	vmtService.TurboScheduler = turboSched
-
-	vmtSched := vmtscheduler.NewVMTScheduler(c.Client, c.Meta)
-	turboSched.SetVMTScheduler(vmtSched)
-
-	return vmtService
 }
 
 // Run begins watching and scheduling. It starts a goroutine and returns immediately.
 func (v *VMTurboService) Run() {
 	glog.V(3).Infof("********** Start runnning VMT service **********")
 
-	vmtCommunicator := comm.NewVMTCommunicator(v.config.Client, v.config.Meta, v.config.EtcdStorage)
-	v.vmtcomm = vmtCommunicator
 	// register and validates to vmturbo server
-	go vmtCommunicator.Run()
+	go v.vmtcomm.Run()
 
 	vmtEvents := registry.NewVMTEvents(v.config.Client, "", v.config.EtcdStorage)
 
