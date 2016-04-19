@@ -8,14 +8,13 @@ import (
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/fields"
 	"k8s.io/kubernetes/pkg/labels"
-	// "k8s.io/kubernetes/pkg/storage"
-
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/registry"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/storage"
-
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"
-
 	"github.com/golang/glog"
+	cmdutil "k8s.io/kubernetes/pkg/kubectl/cmd/util"
+	"k8s.io/kubernetes/pkg/kubectl"
+	"k8s.io/kubernetes/pkg/runtime"
 )
 
 // KubernetesActionExecutor is responsilbe for executing different kinds of actions requested by vmt server.
@@ -156,8 +155,16 @@ func (this *KubernetesActionExecutor) MovePod(podIdentifier, targetNodeIdentifie
 
 	glog.V(3).Infof("Now Moving Pod %s in namespace %s.", podName, podNamespace)
 
+	var containers []api.Container
+	params, containers, mustMakeCopy, err := this.rcTraversalPodExctraction(podName, podNamespace)
+	if err != nil {
+		glog.Errorf("Error creating Pod for move: %s\n", err)
+	}
+
+	// TODO make sure that Pod is moved to target VM if not, place it in source VM
+	// placing Delete Pod here so there is no name conflict
 	// Delete pod
-	err := this.KubeClient.Pods(podNamespace).Delete(podName, nil)
+	err = this.KubeClient.Pods(podNamespace).Delete(podName, nil)
 	if err != nil {
 		glog.Errorf("Error deleting pod %s: %s.\n", podName, err)
 		return fmt.Errorf("Error deleting pod %s: %s.\n", podName, err)
@@ -165,11 +172,15 @@ func (this *KubernetesActionExecutor) MovePod(podIdentifier, targetNodeIdentifie
 		glog.V(3).Infof("Successfully delete pod %s.\n", podName)
 	}
 
-	action := "move"
+	// complete Pod creation
+	if mustMakeCopy{
+		err = this.createPod(params, containers)
+		if err != nil {
+			glog.Errorf("Error creating Pod for move: %s\n", err)
+		}
+	}
 
-	// TODO! For now the move aciton is accomplished by the MoveSimulator.
-	// moveSimulator := &MoveSimulator{}
-	// moveSimulator.SimulateMove(action, podName, targetNodeIdentifier, msgID)
+	action := "move"
 
 	// Create VMTEvent and post onto etcd.
 	vmtEvents := registry.NewVMTEvents(this.KubeClient, "", this.EtcdStorage)
@@ -181,6 +192,155 @@ func (this *KubernetesActionExecutor) MovePod(podIdentifier, targetNodeIdentifie
 		fmt.Errorf("Error posting vmtevent: %s\n", errorPost)
 	}
 	return nil
+}
+
+func (this *KubernetesActionExecutor) createPod(params map[string]interface{}, containers []api.Container) error{
+	obj, err := generatePod(params, containers)
+	if err != nil {
+		return err
+	}
+	objType := "Pod"
+	obj, err = cmdutil.Merge(obj, "", objType)
+	if err != nil {
+		return err
+	}
+	obj, err = this.KubeClient.Pods(params["namespace"].(string)).Create(obj.(*api.Pod))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func generatePod(genericParams map[string]interface{}, containers []api.Container) (runtime.Object, error) {
+	params := map[string]string{}
+	for key, value := range genericParams {
+		strVal, isString := value.(string)
+		if !isString {
+			return nil, fmt.Errorf("expected string, saw %v for '%s'", value, key)
+		}
+		params[key] = strVal
+	}
+
+	labelString, found := params["labels"]
+	var labels map[string]string
+	var err error
+	if found && len(labelString) > 0 {
+		labels, err = kubectl.ParseLabels(labelString)
+		if err != nil {
+			return nil, err
+		}
+	}
+	restartPolicy := api.RestartPolicy(params["restart"])
+	pod := api.Pod{
+		ObjectMeta: api.ObjectMeta{
+			Name:   params["name"],
+			Labels: labels,
+		},
+		Spec: api.PodSpec{
+			Containers: containers,
+			DNSPolicy:     api.DNSClusterFirst,
+			RestartPolicy: restartPolicy,
+		},
+	}
+	return &pod, nil
+}
+
+func (this *KubernetesActionExecutor) extractPodMetadata(podNamespace, podName string, params map[string]interface{}) ([]api.Container, error){
+	pod , err := this.KubeClient.Pods(podNamespace).Get(podName)
+	if err != nil {
+		glog.Errorf("Error getting pod %s: %s.\n", podName, err)
+		return nil, err
+	} else {
+		glog.V(3).Infof("Successfully got pod %s.\n", podName)
+	}
+	containers := []api.Container{}
+	if pod.Labels == nil {
+		params["labels"] = ""
+	} else{
+		params["labels"] = pod.Labels
+	}
+	params["default-name"] = pod.Name
+	params["replicas"] = "1" 
+	params["restart"] = pod.Spec.RestartPolicy
+	params["name"] = podName
+	params["namespace"] = podNamespace
+	for _, container := range pod.Spec.Containers {
+		containers = append(containers, container)
+	}
+	glog.V(3).Infof("Successfully  create pod before deleting original pod %s.\n", podName)
+	return containers, nil
+}
+
+
+func checkRCList(rcList []api.ReplicationController, labels map[string]string) (bool, error) {
+	hasRC := false
+	for _, rc := range rcList{
+		// use function to check if a given RC will take care of this pod
+		hasRC , _ := findMatchingLabels(rc.Spec.Selector, labels)
+		if hasRC {
+			break
+		}
+	}
+	return hasRC, nil
+}
+
+func (this *KubernetesActionExecutor) rcTraversalPodExctraction(podName, podNamespace string) (map[string]interface{}, []api.Container, bool, error){
+	// loop through all the labels in the pod and get List of RCs with selector that match at least one label
+	mustMakeCopy := false
+	currentPod , err := this.KubeClient.Pods(podNamespace).Get(podName)
+	podLabels := currentPod.Labels
+	if podLabels != nil { 
+		for key, value := range podLabels {
+			thisLabel := map[string]string{key:value}
+			thisLabelSet := labels.Set(thisLabel)
+			labelAsSelector := thisLabelSet.AsSelector()
+			currentRCs , err := this.KubeClient.ReplicationControllers(podNamespace).List(labelAsSelector) // pod label is passed to list
+			if err != nil {
+				glog.Errorf("Error getting RCs")
+				return nil, nil, false, fmt.Errorf("Error  getting RC list")
+			}
+			rcList := currentRCs.Items
+			mustMakeCopy, err = checkRCList(rcList, podLabels)
+		}
+	} else {
+		mustMakeCopy = true
+	}
+
+	var containers []api.Container
+	var params map[string]interface{}
+	params = make(map[string]interface{})
+
+	// if the pod didn't have any RCs then we make a copy of the pod's metadata and specs
+	if mustMakeCopy {
+		glog.V(3).Infof("Starting to make copy of pod: %s.\n", podName)
+		containers, err = this.extractPodMetadata(podNamespace, podName, params) 
+		if err != nil {
+			return nil, nil, true, fmt.Errorf("Pod could not be copied.\n")
+		}
+	}
+	return params, containers, mustMakeCopy , nil
+}
+
+func findMatchingLabels(selectors map[string]string, labels map[string]string) (bool, error) {
+	isMatching := false
+	for key, val := range selectors{
+		if labels[key] == val {
+			isMatching = true
+		}else {
+			isMatching = false
+			break
+		}
+	}
+	return isMatching, nil	
+}
+
+// this function is Pam's change to make the movepod
+func listOfImages(spec *api.PodSpec) []string {
+	var images []string
+	for _, container := range spec.Containers {
+		images = append(images, container.Image)
+	}
+	return images
 }
 
 // TODO. Thoughts. This is used to scale up and down. So we need the pod namespace and label here.
