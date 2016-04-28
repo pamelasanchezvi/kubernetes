@@ -22,7 +22,7 @@ const (
 // example : http://localhost:8400/vmturbo/api/externaltargets?
 //                     type=Kubernetes&nameOrAddress=10.10.150.2&username=AAA&targetIdentifier=A&password=Sysdreamworks123
 func (vmtApi *VmtApi) AddK8sTarget(targetType, nameOrAddress, username, targetIdentifier, password string) error {
-	glog.V(3).Infof("Add target to VMTurbo Ops Manager.")
+	glog.V(3).Infof("Calling VMTurbo REST API to added current %s target.", targetType)
 
 	requestData := make(map[string]string)
 
@@ -53,12 +53,12 @@ func (vmtApi *VmtApi) AddK8sTarget(targetType, nameOrAddress, username, targetId
 	requestDataBuffer.WriteString(password)
 
 	s := requestDataBuffer.String()
-	// glog.V(3).Infof("parameters are %s", s)
+
 	respMsg, err := vmtApi.apiPost("/externaltargets", s)
 	if err != nil {
 		return err
 	}
-	glog.V(3).Infof("Add target response is %", respMsg)
+	glog.V(4).Infof("Add target response is %s", respMsg)
 
 	return nil
 }
@@ -66,13 +66,13 @@ func (vmtApi *VmtApi) AddK8sTarget(targetType, nameOrAddress, username, targetId
 // Discover a target using api
 // http://localhost:8400/vmturbo/api/targets/k8s_vmt
 func (vmtApi *VmtApi) DiscoverTarget(nameOrAddress string) error {
-	glog.V(4).Info("---------- Inside DiscoverTarget() ----------")
+	glog.V(3).Info("Calling VMTurbo REST API to initiate a new discovery.")
 
 	respMsg, err := vmtApi.apiPost("/targets/"+nameOrAddress, "")
 	if err != nil {
 		return err
 	}
-	glog.Infof("Discover target response is %", respMsg)
+	glog.V(4).Infof("Discover target response is %s", respMsg)
 
 	return nil
 }
@@ -89,7 +89,7 @@ func (vmtApi *VmtApi) Delete(getUrl string) (string, error) {
 	return vmtApi.apiDelete(getUrl)
 }
 
-// call vmturbo api. return response
+// Call vmturbo api. return response
 func (vmtApi *VmtApi) apiPost(postUrl, requestDataString string) (string, error) {
 	fullUrl := "http://" + vmtApi.vmtUrl + "/vmturbo/api" + postUrl + requestDataString
 	glog.V(4).Info("The full Url is ", fullUrl)
@@ -109,13 +109,13 @@ func (vmtApi *VmtApi) apiPost(postUrl, requestDataString string) (string, error)
 		glog.Errorf("Error getting response: %s", err)
 		return "", err
 	}
-	glog.V(3).Infof("Post Succeed: %s", string(respContent))
+	glog.V(4).Infof("Post Succeed: %s", string(respContent))
 
 	defer resp.Body.Close()
 	return respContent, nil
 }
 
-// call vmturbo api. return response
+// Call vmturbo api. return response
 func (vmtApi *VmtApi) apiGet(getUrl string) (string, error) {
 	fullUrl := "http://" + vmtApi.vmtUrl + "/vmturbo/api" + getUrl
 	glog.V(4).Info("The full Url is ", fullUrl)
@@ -134,7 +134,7 @@ func (vmtApi *VmtApi) apiGet(getUrl string) (string, error) {
 		glog.Errorf("Error getting response: %s", err)
 		return "", err
 	}
-	glog.V(3).Infof("Get Succeed: %s", string(respContent))
+	glog.V(4).Infof("Get Succeed: %s", string(respContent))
 	defer resp.Body.Close()
 	return respContent, nil
 }
@@ -158,7 +158,7 @@ func (vmtApi *VmtApi) apiDelete(getUrl string) (string, error) {
 		glog.Errorf("Error getting response: %s", err)
 		return "", err
 	}
-	glog.V(3).Infof("DELETE call Succeed: %s", string(respContent))
+	glog.V(4).Infof("DELETE call Succeed: %s", string(respContent))
 	defer resp.Body.Close()
 	return respContent, nil
 }
@@ -168,16 +168,15 @@ func parseAPICallResponse(resp *http.Response) (string, error) {
 	if resp == nil {
 		return "", fmt.Errorf("response sent in is nil")
 	}
-	glog.V(3).Infof("response body is %s", resp.Body)
+	glog.V(4).Infof("response body is %s", resp.Body)
 
 	content, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		glog.Errorf("Error after ioutil.ReadAll: %s", err)
 		return "", err
 	}
-	glog.V(3).Infof("response content is %s", string(content))
+	glog.V(4).Infof("response content is %s", string(content))
 
-	// TODO should parse the content. Currently don't know the correct post response content.
 	return string(content), nil
 }
 

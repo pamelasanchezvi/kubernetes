@@ -18,8 +18,8 @@ limitations under the License.
 package app
 
 import (
-	"fmt"
 	"net"
+	// "net/http"
 	"os"
 
 	"k8s.io/kubernetes/pkg/api/latest"
@@ -27,12 +27,11 @@ import (
 	"k8s.io/kubernetes/pkg/client"
 	"k8s.io/kubernetes/pkg/client/clientcmd"
 	clientcmdapi "k8s.io/kubernetes/pkg/client/clientcmd/api"
-	"k8s.io/kubernetes/pkg/master"
-	// "k8s.io/kubernetes/pkg/storage"
-	"k8s.io/kubernetes/pkg/tools"
 	// "k8s.io/kubernetes/pkg/healthz"
+	"k8s.io/kubernetes/pkg/master"
 	"k8s.io/kubernetes/pkg/master/ports"
-	// "k8s.io/kubernetes/pkg/util"
+	"k8s.io/kubernetes/pkg/tools"
+	_ "k8s.io/kubernetes/plugin/pkg/scheduler/algorithmprovider"
 
 	"k8s.io/kubernetes/plugin/pkg/vmturbo"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/conversion"
@@ -85,12 +84,11 @@ func (s *VMTServer) AddFlags(fs *pflag.FlagSet) {
 
 // Run runs the specified VMTServer.  This should never exit.
 func (s *VMTServer) Run(_ []string) error {
-	fmt.Println(".......... Start run vmt server ..........")
 	if s.Kubeconfig == "" && s.Master == "" {
 		glog.Warningf("Neither --kubeconfig nor --master was specified.  Using default API client.  This might not work.")
 	}
 
-	glog.Infof("Master is %s", s.Master)
+	glog.V(3).Infof("Master is %s", s.Master)
 
 	if s.MetaConfigPath == "" {
 		glog.Fatalf("The path to the VMT config file is not provided.Exiting...")

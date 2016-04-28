@@ -1,17 +1,13 @@
 package vmturbo
 
 import (
-	"fmt"
 	"strings"
 
 	"k8s.io/kubernetes/pkg/api"
 	"k8s.io/kubernetes/pkg/util"
-	"k8s.io/kubernetes/plugin/pkg/scheduler"
 
-	// "k8s.io/kubernetes/plugin/pkg/vmturbo/action"
-	// vmtapi "k8s.io/kubernetes/plugin/pkg/vmturbo/api"
-	"k8s.io/kubernetes/plugin/pkg/vmturbo/deploy"
 	"k8s.io/kubernetes/plugin/pkg/vmturbo/registry"
+	turboscheduler "k8s.io/kubernetes/plugin/pkg/vmturbo/scheduler"
 	comm "k8s.io/kubernetes/plugin/pkg/vmturbo/vmturbocommunicator"
 
 	"github.com/vmturbo/vmturbo-go-sdk/sdk"
@@ -24,37 +20,34 @@ type VMTurboService struct {
 	vmtcomm      *comm.VMTCommunicator
 	vmtEventChan chan *registry.VMTEvent
 	// VMTurbo Scheduler
-	vmtScheduler *deploy.VMTScheduler
+	TurboScheduler *turboscheduler.TurboScheduler
 }
 
 func NewVMTurboService(c *Config) *VMTurboService {
-	vmtService := &VMTurboService{
-		config: c,
+	turboSched := turboscheduler.NewTurboScheduler(c.Client, c.Meta)
+
+	vmtEventChannel := make(chan *registry.VMTEvent)
+
+	vmtCommunicator := comm.NewVMTCommunicator(c.Client, c.Meta, c.EtcdStorage)
+
+	return &VMTurboService{
+		config:         c,
+		vmtcomm:        vmtCommunicator,
+		vmtEventChan:   vmtEventChannel,
+		TurboScheduler: turboSched,
 	}
-	vmtService.vmtEventChan = make(chan *registry.VMTEvent)
-	vmtService.vmtScheduler = deploy.NewVMTScheduler(vmtService.config.Client)
-	return vmtService
 }
 
 // Run begins watching and scheduling. It starts a goroutine and returns immediately.
 func (v *VMTurboService) Run() {
 	glog.V(3).Infof("********** Start runnning VMT service **********")
 
-	vmtCommunicator := comm.NewVMTCommunicator(v.config.Client, v.config.Meta, v.config.EtcdStorage)
-	v.vmtcomm = vmtCommunicator
 	// register and validates to vmturbo server
-	go vmtCommunicator.Run()
+	go v.vmtcomm.Run()
 
-	// for test vmtevents etcd registry
 	vmtEvents := registry.NewVMTEvents(v.config.Client, "", v.config.EtcdStorage)
-	event := registry.GenerateVMTEvent("create", "default", "podname", "1.0.0.0", 1)
-	_, errorPost := vmtEvents.Create(event)
-	if errorPost != nil {
-		glog.Errorf("Error posting vmtevent: %s\n", errorPost)
-	}
 
 	//delete all the vmt events
-	// vmtEvents := registry.NewVMTEvents(v.config.Client, "", v.config.EtcdStorage)
 	errorDelete := vmtEvents.DeleteAll()
 	if errorDelete != nil {
 		glog.V(3).Infof("Error deleting all vmt events: %s", errorDelete)
@@ -108,7 +101,7 @@ func (v *VMTurboService) getNextPod() {
 				glog.V(2).Infof("Pod %s/%s is to be scheduled to %s as a result of MOVE action",
 					pod.Namespace, pod.Name, vmtEventFromEtcd.Destination)
 
-				v.vmtScheduler.VMTSchedule(pod, vmtEventFromEtcd.Destination)
+				v.TurboScheduler.ScheduleTo(pod, vmtEventFromEtcd.Destination)
 			} else {
 				hasError = true
 			}
@@ -123,11 +116,15 @@ func (v *VMTurboService) getNextPod() {
 				hasError = true
 				break
 			}
-			v.schedule(pod)
+			err := v.TurboScheduler.Schedule(pod)
+			if err != nil {
+				hasError = true
+				glog.Errorf("Scheduling failed: %s", err)
+			}
 		}
 
 		if hasError {
-			// TODO, send back action failed. Then simple deploy the pod using scheduler.
+			// Send back action failed. Then simply deploy the pod using scheduler.
 			glog.V(2).Infof("Action failed")
 			v.vmtcomm.SendActionReponse(sdk.ActionResponseState_FAILED, int32(0), int32(vmtEventFromEtcd.VMTMessageID), "Failed")
 
@@ -147,7 +144,11 @@ func (v *VMTurboService) getNextPod() {
 	default:
 		glog.V(3).Infof("No VMTEvent from ETCD. Simply schedule the pod.")
 	}
-	v.schedule(pod)
+	err := v.TurboScheduler.Schedule(pod)
+
+	if err != nil {
+		glog.Errorf("Scheduling failed: %s", err)
+	}
 }
 
 func validatePodToBeMoved(pod *api.Pod, vmtEvent *registry.VMTEvent) bool {
@@ -176,47 +177,4 @@ func validatePodToBeMoved(pod *api.Pod, vmtEvent *registry.VMTEvent) bool {
 			eventPodNamespace, eventPodName, pod.Namespace, pod.Name)
 		return false
 	}
-}
-
-func (vmtService *VMTurboService) schedule(pod *api.Pod) {
-	var placementMap map[*api.Pod]string
-	placementMap, err := vmtService.getDestinationFromVmturbo(pod)
-	if err != nil {
-		glog.Errorf("Error scheduling pod using vmturbo service: %s", err)
-		dest, err := defaultScheduler.VMTScheduleHelper(pod)
-		if err != nil {
-			glog.Errorf("Error scheduling pod %s", pod.Namespace+"/"+pod.Name)
-			return
-		}
-		placementMap = make(map[*api.Pod]string)
-		placementMap[pod] = dest
-	}
-
-	for podToBeScheduled, destinationNodeName := range placementMap {
-		vmtService.vmtScheduler.VMTSchedule(podToBeScheduled, destinationNodeName)
-	}
-}
-
-// use vmt api to get reservation destinations
-// TODO for now only deal with one pod at a time
-// But the result is a map. Will change later when deploy works.
-func (vmtService *VMTurboService) getDestinationFromVmturbo(pod *api.Pod) (map[*api.Pod]string, error) {
-	deployRequest := deploy.NewDeployment(vmtService.config.Meta)
-
-	// reservationResult is map[string]string -- [podName]nodeName
-	// TODO !!!!!!! Now only support a single pod.
-	return deployRequest.GetDestinationFromVmturbo(pod)
-}
-
-// Use a scheduler to bind or schedule
-// TODO. This is not a good implementation. MUST Change
-var defaultScheduler *scheduler.Scheduler
-
-func SetSchedulerInstance(s *scheduler.Scheduler) error {
-	if s == nil {
-		return fmt.Errorf("Error! No scheduler instance")
-	}
-	defaultScheduler = s
-	glog.V(3).Info("scheduler is set")
-	return nil
 }
