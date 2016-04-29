@@ -156,7 +156,7 @@ func (this *KubernetesActionExecutor) MovePod(podIdentifier, targetNodeIdentifie
 	glog.V(3).Infof("Now Moving Pod %s in namespace %s.", podName, podNamespace)
 
 	var containers []api.Container
-	params, containers, mustMakeCopy, err := this.rcTraversalPodExctraction(podName, podNamespace)
+	params, containers, mustMakeCopy, err := this.rcTraversalPodExtraction(podName, podNamespace)
 	if err != nil {
 		glog.Errorf("Error creating Pod for move: %s\n", err)
 	}
@@ -204,7 +204,7 @@ func (this *KubernetesActionExecutor) createPod(params map[string]interface{}, c
 	if err != nil {
 		return err
 	}
-	obj, err = this.KubeClient.Pods(params["namespace"].(string)).Create(obj.(*api.Pod))
+	_, err = this.KubeClient.Pods(params["namespace"].(string)).Create(obj.(*api.Pod))
 	if err != nil {
 		return err
 	}
@@ -245,30 +245,30 @@ func generatePod(genericParams map[string]interface{}, containers []api.Containe
 	return &pod, nil
 }
 
-func (this *KubernetesActionExecutor) extractPodMetadata(podNamespace, podName string, params map[string]interface{}) ([]api.Container, error){
+func (this *KubernetesActionExecutor) extractPodMetadata(podNamespace, podName string) (map[string]interface{}, []api.Container, error){
 	pod , err := this.KubeClient.Pods(podNamespace).Get(podName)
 	if err != nil {
 		glog.Errorf("Error getting pod %s: %s.\n", podName, err)
-		return nil, err
+		return nil, nil, err
 	} else {
 		glog.V(3).Infof("Successfully got pod %s.\n", podName)
 	}
+        var params map[string]interface{}
+        params = make(map[string]interface{})
 	containers := []api.Container{}
 	if pod.Labels == nil {
 		params["labels"] = ""
 	} else{
 		params["labels"] = pod.Labels
 	}
-	params["default-name"] = pod.Name
-	params["replicas"] = "1" 
 	params["restart"] = pod.Spec.RestartPolicy
 	params["name"] = podName
 	params["namespace"] = podNamespace
 	for _, container := range pod.Spec.Containers {
 		containers = append(containers, container)
 	}
-	glog.V(3).Infof("Successfully  create pod before deleting original pod %s.\n", podName)
-	return containers, nil
+	glog.V(3).Infof("Successfully create pod before deleting original pod %s.\n", podName)
+	return params, containers, nil
 }
 
 
@@ -276,7 +276,7 @@ func checkRCList(rcList []api.ReplicationController, labels map[string]string) (
 	hasRC := false
 	for _, rc := range rcList{
 		// use function to check if a given RC will take care of this pod
-		hasRC , _ := findMatchingLabels(rc.Spec.Selector, labels)
+		hasRC := findMatchingLabels(rc.Spec.Selector, labels)
 		if hasRC {
 			break
 		}
@@ -284,10 +284,14 @@ func checkRCList(rcList []api.ReplicationController, labels map[string]string) (
 	return hasRC, nil
 }
 
-func (this *KubernetesActionExecutor) rcTraversalPodExctraction(podName, podNamespace string) (map[string]interface{}, []api.Container, bool, error){
+func (this *KubernetesActionExecutor) rcTraversalPodExtraction(podName, podNamespace string) (map[string]interface{}, []api.Container, bool, error){
 	// loop through all the labels in the pod and get List of RCs with selector that match at least one label
 	mustMakeCopy := false
 	currentPod , err := this.KubeClient.Pods(podNamespace).Get(podName)
+	if err != nil {
+                glog.Errorf("Error getting pod name %s: %s.\n", podName, err)
+                return nil, nil, false, err
+	}
 	podLabels := currentPod.Labels
 	if podLabels != nil { 
 		for key, value := range podLabels {
@@ -306,22 +310,20 @@ func (this *KubernetesActionExecutor) rcTraversalPodExctraction(podName, podName
 		mustMakeCopy = true
 	}
 
-	var containers []api.Container
-	var params map[string]interface{}
-	params = make(map[string]interface{})
-
 	// if the pod didn't have any RCs then we make a copy of the pod's metadata and specs
 	if mustMakeCopy {
 		glog.V(3).Infof("Starting to make copy of pod: %s.\n", podName)
-		containers, err = this.extractPodMetadata(podNamespace, podName, params) 
+		params, containers, err := this.extractPodMetadata(podNamespace, podName) 
 		if err != nil {
 			return nil, nil, true, fmt.Errorf("Pod could not be copied.\n")
+		}else{
+			return params, containers, mustMakeCopy , nil
 		}
 	}
-	return params, containers, mustMakeCopy , nil
+	return nil, nil, mustMakeCopy, nil
 }
 
-func findMatchingLabels(selectors map[string]string, labels map[string]string) (bool, error) {
+func findMatchingLabels(selectors map[string]string, labels map[string]string) bool {
 	isMatching := false
 	for key, val := range selectors{
 		if labels[key] == val {
@@ -331,7 +333,7 @@ func findMatchingLabels(selectors map[string]string, labels map[string]string) (
 			break
 		}
 	}
-	return isMatching, nil	
+	return isMatching
 }
 
 // this function is Pam's change to make the movepod
