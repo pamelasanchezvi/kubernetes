@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-without-selector
+spec:
+  containers:
+  - name: nginx
+    image: nginx

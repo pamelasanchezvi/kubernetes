@@ -257,13 +257,13 @@ func (podProbe *PodProbe) getCommoditiesBought(pod *api.Pod, podResourceStat *Po
 		Used(podResourceStat.memAllocationUsed).
 		Create()
 	commoditiesBought = append(commoditiesBought, memAllocationCommBought)
-	selectormap:=pod.Spec.NodeSelector
-	if( len(selectormap) > 0 ){
-		for key, value := range selectormap{
-                        str1 := key+"="+value
-                        accessComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_VMPM_ACCESS).Key(str1).Create()
-        	        commoditiesBought = append(commoditiesBought, accessComm)
-                }
+	selectormap := pod.Spec.NodeSelector
+	if len(selectormap) > 0 {
+		for key, value := range selectormap {
+			str1 := key + "=" + value
+			accessComm := sdk.NewCommodtiyDTOBuilder(sdk.CommodityDTO_VMPM_ACCESS).Key(str1).Create()
+			commoditiesBought = append(commoditiesBought, accessComm)
+		}
 	}
 	return commoditiesBought
 }

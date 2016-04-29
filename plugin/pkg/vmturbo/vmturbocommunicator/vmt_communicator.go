@@ -146,16 +146,11 @@ func createSupplyChain() []*sdk.TemplateDTO {
 		CommodityType: &memAllocationType,
 	}
 	vmpmaccessType := sdk.CommodityDTO_VMPM_ACCESS
-	vmpmaccessTemplateComm := &sdk.TemplateCommodity{
-		Key: &fakeKey,
-		CommodityType: &vmpmaccessType,
-	}
 
 	podSupplyChainNodeBuilder = podSupplyChainNodeBuilder.
 		Provider(sdk.EntityDTO_VIRTUAL_MACHINE, sdk.Provider_LAYERED_OVER).
 		Buys(*cpuAllocationTemplateComm).
-		Buys(*memAllocationTemplateComm).
-		Buys(*vmpmaccessTemplateComm)
+		Buys(*memAllocationTemplateComm)
 	glog.V(3).Infof(".......... pod supply chain node builder is created ..........")
 
 	// Application supplychain builder
